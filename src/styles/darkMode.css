@@ -1,0 +1,49 @@
+/* src/styles/darkMode.css or add to your index.css */
+
+/* Light theme is the default */
+:root {
+    --background: #f9fafb;
+    --foreground: #1f2937;
+    --card: #ffffff;
+    --card-foreground: #1f2937;
+    --primary: #7042D2;
+    --primary-foreground: #ffffff;
+    --secondary: #f3f4f6;
+    --secondary-foreground: #1f2937;
+    --border: #e5e7eb;
+    --sidebar-bg: #ffffff;
+    --header-bg: #ffffff;
+  }
+  
+  /* Dark theme class that gets applied to the HTML root element */
+  .dark {
+    --background: #111827;
+    --foreground: #f9fafb;
+    --card: #1f2937;
+    --card-foreground: #f9fafb;
+    --primary: #7042D2;
+    --primary-foreground: #f9fafb;
+    --secondary: #374151;
+    --secondary-foreground: #f9fafb;
+    --border: #374151;
+    --sidebar-bg: #1f2937;
+    --header-bg: #1f2937;
+  }
+  
+  /* Optional: Add custom scrollbar styles based on theme */
+  .dark ::-webkit-scrollbar {
+    width: 10px;
+  }
+  
+  .dark ::-webkit-scrollbar-track {
+    background: #1f2937;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+    border-radius: 5px;
+  }
+  
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+  }
