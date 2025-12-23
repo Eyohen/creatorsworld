@@ -289,15 +289,20 @@ const getFallbackImage = (creatorId, index = 0) => {
 
 // Check if the image is a valid real image (not a placeholder/avatar service)
 const getCreatorImage = (creator, index = 0) => {
-  const img = creator.profileImage;
+  const img = creator?.profileImage;
   // Check if image is empty, null, or a placeholder service URL
   if (!img ||
       img.trim() === '' ||
-      img.includes('ui-avatars.com') ||
-      img.includes('avatar') ||
-      img.includes('placeholder') ||
-      img.includes('gravatar.com')) {
-    return getFallbackImage(creator.id, index);
+      img.toLowerCase().includes('ui-avatars') ||
+      img.toLowerCase().includes('avatars') ||
+      img.toLowerCase().includes('avatar') ||
+      img.toLowerCase().includes('placeholder') ||
+      img.toLowerCase().includes('gravatar') ||
+      img.toLowerCase().includes('dicebear') ||
+      img.toLowerCase().includes('robohash') ||
+      img.toLowerCase().includes('identicon') ||
+      img.startsWith('data:')) {
+    return getFallbackImage(creator?.id, index);
   }
   return img;
 };
@@ -667,7 +672,7 @@ const BrowseCreatorsPage = () => {
           </div>
         ) : (
           <div className={`grid gap-6 ${viewMode === 'grid' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
-            {creators.map((creator) => (
+            {creators.map((creator, index) => (
               <div
                 key={creator.id}
                 className={`group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl transition-all duration-300 ${
@@ -676,7 +681,7 @@ const BrowseCreatorsPage = () => {
               >
                 <div className={`relative overflow-hidden ${viewMode === 'list' ? 'w-48 flex-shrink-0' : 'h-64'}`}>
                   <img
-                    src={getCreatorImage(creator)}
+                    src={getCreatorImage(creator, index)}
                     alt={creator.displayName}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />

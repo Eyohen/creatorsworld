@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { requestApi } from '../../api';
+import {
+  FileText, Clock, CheckCircle2, XCircle, AlertCircle,
+  Building2, Calendar, DollarSign, ChevronRight, Loader2,
+  Filter, Inbox, Eye, MessageSquare
+} from 'lucide-react';
 
 const statusOptions = [
   { value: '', label: 'All Requests' },
@@ -34,105 +39,173 @@ const Requests = () => {
   };
 
   const getStatusBadge = (status) => {
-    const styles = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      viewed: 'bg-blue-100 text-blue-800',
-      negotiating: 'bg-purple-100 text-purple-800',
-      accepted: 'bg-green-100 text-green-800',
-      contract_pending: 'bg-orange-100 text-orange-800',
-      contract_signed: 'bg-green-100 text-green-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      content_submitted: 'bg-purple-100 text-purple-800',
-      revision_requested: 'bg-orange-100 text-orange-800',
-      completed: 'bg-green-100 text-green-800',
-      declined: 'bg-red-100 text-red-800',
-      cancelled: 'bg-gray-100 text-gray-800',
+    const statusConfig = {
+      pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', icon: Clock, label: 'Pending' },
+      viewed: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Eye, label: 'Viewed' },
+      negotiating: { bg: 'bg-purple-100', text: 'text-purple-700', icon: MessageSquare, label: 'Negotiating' },
+      accepted: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle2, label: 'Accepted' },
+      contract_pending: { bg: 'bg-orange-100', text: 'text-orange-700', icon: FileText, label: 'Contract Pending' },
+      contract_signed: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle2, label: 'Contract Signed' },
+      in_progress: { bg: 'bg-blue-100', text: 'text-blue-700', icon: Loader2, label: 'In Progress' },
+      content_submitted: { bg: 'bg-purple-100', text: 'text-purple-700', icon: FileText, label: 'Content Submitted' },
+      revision_requested: { bg: 'bg-orange-100', text: 'text-orange-700', icon: AlertCircle, label: 'Revision Requested' },
+      completed: { bg: 'bg-green-100', text: 'text-green-700', icon: CheckCircle2, label: 'Completed' },
+      declined: { bg: 'bg-red-100', text: 'text-red-700', icon: XCircle, label: 'Declined' },
+      cancelled: { bg: 'bg-gray-100', text: 'text-gray-700', icon: XCircle, label: 'Cancelled' },
     };
-    return styles[status] || 'bg-gray-100 text-gray-800';
+    return statusConfig[status] || { bg: 'bg-gray-100', text: 'text-gray-700', icon: FileText, label: status };
   };
+
+  const pendingCount = requests.filter(r => r.status === 'pending').length;
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        <p className="text-gray-500">Loading requests...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="font-semibold text-3xl text-gray-900">Collaboration Requests</h1>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg"
-        >
-          {statusOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
+      {/* Header */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-600/20 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+
+        <div className="relative z-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">Collaboration Requests</h1>
+              <p className="text-gray-400">Manage incoming requests from brands</p>
+            </div>
+            {pendingCount > 0 && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-xl">
+                <Clock className="w-5 h-5 text-yellow-400" />
+                <span className="text-yellow-300 font-medium">{pendingCount} pending request{pendingCount !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {requests.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow p-12 text-center">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
+      {/* Filter Bar */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 text-gray-600">
+            <Filter className="w-5 h-5" />
+            <span className="text-sm font-medium">Filter:</span>
           </div>
-          <h3 className="font-semibold text-gray-900 mb-2">
+          <div className="flex gap-2 flex-wrap">
+            {statusOptions.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setStatusFilter(opt.value)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  statusFilter === opt.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Requests List */}
+      {requests.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center">
+          <div className="w-20 h-20 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Inbox className="w-10 h-10 text-gray-400" />
+          </div>
+          <h3 className="font-semibold text-gray-900 text-xl mb-2">
             {statusFilter ? 'No requests with this status' : 'No requests yet'}
           </h3>
-          <p className="text-gray-500">
+          <p className="text-gray-500 mb-6 max-w-sm mx-auto">
             {!statusFilter && 'Complete your profile to start receiving collaboration requests from brands'}
           </p>
+          <Link
+            to="/creator/profile"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition-colors"
+          >
+            Complete Profile
+            <ChevronRight className="w-5 h-5" />
+          </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl shadow overflow-hidden">
-          <div className="divide-y divide-gray-100">
-            {requests.map((request) => (
+        <div className="space-y-4">
+          {requests.map((request) => {
+            const statusInfo = getStatusBadge(request.status);
+            const StatusIcon = statusInfo.icon;
+
+            return (
               <Link
                 key={request.id}
                 to={`/creator/requests/${request.id}`}
-                className="block p-6 hover:bg-gray-50 transition-colors"
+                className="block bg-white rounded-2xl border border-gray-100 p-6 hover:shadow-lg hover:shadow-gray-100/50 transition-all duration-300"
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                      {request.brand?.logoUrl ? (
-                        <img src={request.brand.logoUrl} alt="" className="w-full h-full rounded-full object-cover" />
-                      ) : (
-                        <span className="text-gray-500 font-medium">{request.brand?.companyName?.[0]}</span>
-                      )}
+                <div className="flex items-start gap-5">
+                  {/* Brand Logo */}
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {request.brand?.logo ? (
+                      <img src={request.brand.logo} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Building2 className="w-6 h-6 text-gray-400" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <div>
+                        <h3 className="font-semibold text-gray-900 text-lg">
+                          {request.title || 'Collaboration Request'}
+                        </h3>
+                        <p className="text-sm text-gray-500">{request.brand?.companyName}</p>
+                      </div>
+                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.text}`}>
+                        <StatusIcon className="w-4 h-4" />
+                        {statusInfo.label}
+                      </span>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{request.title}</h3>
-                      <p className="text-sm text-gray-500">{request.brand?.companyName}</p>
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">{request.description}</p>
-                      <div className="flex items-center gap-4 mt-3 text-sm text-gray-500">
-                        {request.deadline && (
-                          <span>Due: {new Date(request.deadline).toLocaleDateString()}</span>
-                        )}
-                        <span>{request.items?.length || 0} deliverables</span>
+
+                    <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                      {request.description || 'No description provided'}
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <div className="flex items-center gap-1.5 text-gray-500">
+                        <DollarSign className="w-4 h-4" />
+                        <span className="font-semibold text-blue-600">
+                          ₦{(request.proposedBudget || request.finalBudget || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {(request.proposedStartDate || request.proposedEndDate) && (
+                        <div className="flex items-center gap-1.5 text-gray-500">
+                          <Calendar className="w-4 h-4" />
+                          <span>
+                            {request.proposedStartDate && new Date(request.proposedStartDate).toLocaleDateString()}
+                            {request.proposedStartDate && request.proposedEndDate && ' - '}
+                            {request.proposedEndDate && new Date(request.proposedEndDate).toLocaleDateString()}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 text-gray-400">
+                        <Clock className="w-4 h-4" />
+                        <span>{new Date(request.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-4">
-                    <p className="font-semibold text-green-600 text-lg">
-                      ₦{request.totalAmount?.toLocaleString()}
-                    </p>
-                    <span className={`inline-block mt-2 text-sm px-3 py-1 rounded-full ${getStatusBadge(request.status)}`}>
-                      {request.status?.replace(/_/g, ' ')}
-                    </span>
-                    <p className="text-sm text-gray-400 mt-2">
-                      {new Date(request.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
+
+                  {/* Arrow */}
+                  <ChevronRight className="w-5 h-5 text-gray-300 flex-shrink-0 mt-2" />
                 </div>
               </Link>
-            ))}
-          </div>
+            );
+          })}
         </div>
       )}
     </div>

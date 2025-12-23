@@ -1,11 +1,16 @@
 import { Outlet, Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useState } from 'react';
+import {
+  LayoutDashboard, Search, Heart, FileText, MessageSquare, Settings,
+  LogOut, Menu, X, Bell, ChevronDown, Sparkles
+} from 'lucide-react';
 
 const BrandLayout = () => {
   const { user, profile, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -13,117 +18,214 @@ const BrandLayout = () => {
   };
 
   const navItems = [
-    { path: '/brand/dashboard', label: 'Dashboard', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-    { path: '/brand/discover', label: 'Discover Creators', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-    { path: '/brand/saved', label: 'Saved Creators', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-    { path: '/brand/requests', label: 'Campaigns', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
-    { path: '/brand/messages', label: 'Messages', icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
-    { path: '/brand/settings', label: 'Settings', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
+    { path: '/brand/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/brand/discover', label: 'Discover Creators', icon: Search },
+    { path: '/brand/saved', label: 'Saved Creators', icon: Heart },
+    { path: '/brand/requests', label: 'Campaigns', icon: FileText },
+    { path: '/brand/messages', label: 'Messages', icon: MessageSquare },
+    { path: '/brand/settings', label: 'Settings', icon: Settings },
   ];
+
+  const getTierBadge = () => {
+    const tier = profile?.tier || 'starter';
+    const styles = {
+      starter: 'bg-gray-100 text-gray-600',
+      growth: 'bg-blue-100 text-blue-600',
+      business: 'bg-purple-100 text-purple-600',
+      enterprise: 'bg-gradient-to-r from-amber-400 to-orange-500 text-white',
+    };
+    return styles[tier] || styles.starter;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Sidebar */}
-      <aside className={`fixed top-0 left-0 z-50 h-full w-64 bg-white shadow-lg transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed top-0 left-0 z-50 h-full w-72 bg-slate-900 transform transition-transform duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-            <Link to="/" className="font-semibold text-xl font-bold text-green-600">
-              CreatorsWorld
+          <div className="flex items-center justify-between h-20 px-6 border-b border-slate-800">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center">
+                <span className="text-white font-bold text-lg">C</span>
+              </div>
+              <span className="font-semibold text-xl text-white">CreatorsWorld</span>
             </Link>
             <button
-              className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
+              className="lg:hidden p-2 text-gray-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
               onClick={() => setSidebarOpen(false)}
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X size={20} />
             </button>
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 py-4 overflow-y-auto">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={({ isActive }) =>
-                  `flex items-center px-4 py-3 text-sm transition-colors ${
-                    isActive
-                      ? 'text-blue-600 bg-blue-100 border-r-4 border-blue-600'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`
-                }
-              >
-                <svg className="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                </svg>
-                {item.label}
-              </NavLink>
-            ))}
+          <nav className="flex-1 py-6 px-4 overflow-y-auto">
+            <div className="space-y-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
+                        : 'text-gray-400 hover:text-white hover:bg-slate-800'
+                    }`
+                  }
+                >
+                  <item.icon size={20} />
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+
+            {/* Upgrade Card */}
+            {profile?.tier !== 'enterprise' && (
+              <div className="mt-8 p-4 bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles size={18} className="text-blue-200" />
+                  <span className="text-sm font-semibold text-white">Upgrade Plan</span>
+                </div>
+                <p className="text-xs text-blue-100 mb-3">
+                  Get more features and unlock unlimited campaigns
+                </p>
+                <Link
+                  to="/brand/settings"
+                  className="block w-full py-2 text-center text-sm font-medium bg-white text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  View Plans
+                </Link>
+              </div>
+            )}
           </nav>
 
-          {/* User */}
-          <div className="p-4 border-t border-gray-200">
-            <div className="flex items-center">
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+          {/* User Profile */}
+          <div className="p-4 border-t border-slate-800">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/50">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0">
                 {profile?.logoUrl ? (
-                  <img src={profile.logoUrl} alt="" className="w-full h-full rounded-full object-cover" />
+                  <img src={profile.logoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
                 ) : (
-                  <span className="text-gray-500 font-medium">
+                  <span className="text-white font-semibold">
                     {profile?.companyName?.[0] || user?.email?.[0]?.toUpperCase()}
                   </span>
                 )}
               </div>
-              <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
-                  {profile?.companyName || 'Brand'}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {profile?.companyName || 'Your Brand'}
                 </p>
-                <p className="text-caption text-gray-500 capitalize">
-                  {profile?.tier || 'Starter'} Plan
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${getTierBadge()}`}>
+                    {profile?.tier || 'Starter'}
+                  </span>
+                </div>
               </div>
             </div>
             <button
               onClick={handleLogout}
-              className="mt-4 w-full py-2 text-sm text-gray-600 hover:text-red-500 transition-colors"
+              className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
             >
-              Logout
+              <LogOut size={18} />
+              Sign Out
             </button>
           </div>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="lg:pl-64">
+      <div className="lg:pl-72">
         {/* Top bar */}
-        <header className="sticky top-0 z-40 bg-white shadow-sm">
-          <div className="flex items-center justify-between h-16 px-4">
-            <button
-              className="lg:hidden p-2 text-gray-500 hover:text-gray-700"
-              onClick={() => setSidebarOpen(true)}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-
-            <div className="flex items-center space-x-4">
-              {/* Notifications */}
-              <button className="p-2 text-gray-500 hover:text-gray-700 relative">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
+          <div className="flex items-center justify-between h-16 px-4 lg:px-8">
+            <div className="flex items-center gap-4">
+              <button
+                className="lg:hidden p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                onClick={() => setSidebarOpen(true)}
+              >
+                <Menu size={24} />
               </button>
+
+              {/* Search Bar - Hidden on mobile */}
+              <div className="hidden md:flex items-center">
+                <div className="relative">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Search creators, campaigns..."
+                    className="w-80 pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Notifications */}
+              <button className="relative p-2.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors">
+                <Bell size={20} />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white"></span>
+              </button>
+
+              {/* Profile Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center gap-3 p-1.5 pr-3 rounded-xl hover:bg-gray-100 transition-colors"
+                >
+                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
+                    {profile?.logoUrl ? (
+                      <img src={profile.logoUrl} alt="" className="w-full h-full rounded-xl object-cover" />
+                    ) : (
+                      <span className="text-white text-sm font-semibold">
+                        {profile?.companyName?.[0] || user?.email?.[0]?.toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-medium text-gray-900">
+                      {profile?.companyName || 'Your Brand'}
+                    </p>
+                    <p className="text-xs text-gray-500 capitalize">{profile?.tier || 'Starter'} Plan</p>
+                  </div>
+                  <ChevronDown size={16} className="text-gray-400 hidden sm:block" />
+                </button>
+
+                {profileDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setProfileDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-100 py-2 z-20">
+                      <Link
+                        to="/brand/settings"
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => setProfileDropdownOpen(false)}
+                      >
+                        <Settings size={16} />
+                        Account Settings
+                      </Link>
+                      <hr className="my-2 border-gray-100" />
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                      >
+                        <LogOut size={16} />
+                        Sign Out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </header>

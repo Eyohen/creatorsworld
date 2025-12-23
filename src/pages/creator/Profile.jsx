@@ -3,13 +3,13 @@ import { creatorApi, lookupApi, uploadApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 
 const Profile = () => {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
 
-  const [profile, setProfile] = useState({
+  const [profileData, setProfileData] = useState({
     displayName: '',
     bio: '',
     gender: '',
@@ -23,19 +23,19 @@ const Profile = () => {
   useEffect(() => {
     loadProfile();
     loadStates();
-  }, []);
+  }, [authProfile]);
 
   const loadProfile = () => {
-    if (user?.creator) {
-      setProfile({
-        displayName: user.creator.displayName || '',
-        bio: user.creator.bio || '',
-        gender: user.creator.gender || '',
-        stateId: user.creator.stateId || '',
-        cityId: user.creator.cityId || '',
+    if (authProfile) {
+      setProfileData({
+        displayName: authProfile.displayName || '',
+        bio: authProfile.bio || '',
+        gender: authProfile.gender || '',
+        stateId: authProfile.stateId || '',
+        cityId: authProfile.cityId || '',
       });
-      if (user.creator.stateId) {
-        loadCities(user.creator.stateId);
+      if (authProfile.stateId) {
+        loadCities(authProfile.stateId);
       }
     }
   };
@@ -59,7 +59,7 @@ const Profile = () => {
   };
 
   const handleStateChange = (stateId) => {
-    setProfile({ ...profile, stateId, cityId: '' });
+    setProfileData({ ...profileData, stateId, cityId: '' });
     if (stateId) loadCities(stateId);
   };
 
@@ -68,12 +68,14 @@ const Profile = () => {
     if (!file) return;
 
     setLoading(true);
+    setError('');
     try {
-      const { data } = await uploadApi.uploadImage(file, 'avatar');
-      await creatorApi.updateProfile({ avatarUrl: data.data.url });
+      const { data } = await uploadApi.uploadImage(file);
+      await creatorApi.updateProfile({ profileImage: data.data.url });
       await refreshProfile();
       setSuccess('Profile photo updated!');
     } catch (err) {
+      console.error('Avatar upload error:', err);
       setError('Failed to upload image');
     } finally {
       setLoading(false);
@@ -85,12 +87,14 @@ const Profile = () => {
     if (!file) return;
 
     setLoading(true);
+    setError('');
     try {
-      const { data } = await uploadApi.uploadImage(file, 'cover');
-      await creatorApi.updateProfile({ coverImageUrl: data.data.url });
+      const { data } = await uploadApi.uploadImage(file);
+      await creatorApi.updateProfile({ coverImage: data.data.url });
       await refreshProfile();
       setSuccess('Cover image updated!');
     } catch (err) {
+      console.error('Cover upload error:', err);
       setError('Failed to upload image');
     } finally {
       setLoading(false);
@@ -104,7 +108,7 @@ const Profile = () => {
     setSuccess('');
 
     try {
-      await creatorApi.updateProfile(profile);
+      await creatorApi.updateProfile(profileData);
       await refreshProfile();
       setSuccess('Profile updated successfully!');
     } catch (err) {
@@ -121,8 +125,8 @@ const Profile = () => {
       {/* Cover & Avatar */}
       <div className="bg-white rounded-2xl shadow overflow-hidden">
         <div className="relative h-48 bg-gray-200">
-          {user?.creator?.coverImageUrl && (
-            <img src={user.creator.coverImageUrl} alt="" className="w-full h-full object-cover" />
+          {authProfile?.coverImage && (
+            <img src={authProfile.coverImage} alt="" className="w-full h-full object-cover" />
           )}
           <label className="absolute bottom-4 right-4 bg-white px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-50">
             <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
@@ -133,15 +137,15 @@ const Profile = () => {
           <div className="flex items-end -mt-16">
             <div className="relative">
               <div className="w-32 h-32 rounded-full bg-gray-200 border-4 border-white overflow-hidden">
-                {user?.creator?.avatarUrl ? (
-                  <img src={user.creator.avatarUrl} alt="" className="w-full h-full object-cover" />
+                {authProfile?.profileImage ? (
+                  <img src={authProfile.profileImage} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-gray-500 text-4xl">
-                    {profile.displayName?.[0] || user?.firstName?.[0]}
+                    {profileData.displayName?.[0] || user?.email?.[0]?.toUpperCase()}
                   </div>
                 )}
               </div>
-              <label className="absolute bottom-0 right-0 w-10 h-10 bg-green-600 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-green-700">
+              <label className="absolute bottom-0 right-0 w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center cursor-pointer hover:bg-blue-700">
                 <input type="file" accept="image/*" onChange={handleAvatarUpload} className="hidden" />
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -151,12 +155,12 @@ const Profile = () => {
             </div>
             <div className="ml-6 pb-2">
               <span className={`text-sm px-3 py-1 rounded-full ${
-                user?.creator?.tier === 'elite' ? 'bg-purple-100 text-purple-600' :
-                user?.creator?.tier === 'premium' ? 'bg-yellow-100 text-yellow-600' :
-                user?.creator?.tier === 'verified' ? 'bg-blue-100 text-blue-600' :
+                authProfile?.tier === 'elite' ? 'bg-purple-100 text-purple-600' :
+                authProfile?.tier === 'premium' ? 'bg-yellow-100 text-yellow-600' :
+                authProfile?.tier === 'verified' ? 'bg-blue-100 text-blue-600' :
                 'bg-gray-100 text-gray-600'
               }`}>
-                {user?.creator?.tier} Creator
+                {authProfile?.tier || 'Rising'} Creator
               </span>
             </div>
           </div>
@@ -181,29 +185,29 @@ const Profile = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
             <input
               type="text"
-              value={profile.displayName}
-              onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              value={profileData.displayName}
+              onChange={(e) => setProfileData({ ...profileData, displayName: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>
             <textarea
-              value={profile.bio}
-              onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              value={profileData.bio}
+              onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               rows={4}
             />
-            <p className="text-sm text-gray-500 mt-1">{profile.bio.length}/500 characters</p>
+            <p className="text-sm text-gray-500 mt-1">{profileData.bio.length}/500 characters</p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
             <select
-              value={profile.gender}
-              onChange={(e) => setProfile({ ...profile, gender: e.target.value })}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+              value={profileData.gender}
+              onChange={(e) => setProfileData({ ...profileData, gender: e.target.value })}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Prefer not to say</option>
               <option value="male">Male</option>
@@ -216,9 +220,9 @@ const Profile = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
               <select
-                value={profile.stateId}
+                value={profileData.stateId}
                 onChange={(e) => handleStateChange(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">Select state...</option>
                 {states.map((state) => (
@@ -229,10 +233,10 @@ const Profile = () => {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
               <select
-                value={profile.cityId}
-                onChange={(e) => setProfile({ ...profile, cityId: e.target.value })}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                disabled={!profile.stateId}
+                value={profileData.cityId}
+                onChange={(e) => setProfileData({ ...profileData, cityId: e.target.value })}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={!profileData.stateId}
               >
                 <option value="">Select city...</option>
                 {cities.map((city) => (
@@ -246,7 +250,7 @@ const Profile = () => {
             <button
               type="submit"
               disabled={saving || loading}
-              className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+              className="w-full bg-blue-600 text-white py-3 rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>

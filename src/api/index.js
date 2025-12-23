@@ -104,6 +104,7 @@ export const creatorApi = {
   getMyCategories: () => api.get('/creators/categories/my'),
   updateCategories: (categoryIds) => api.put('/creators/categories', { categoryIds }),
   // Dashboard
+  getDashboard: () => api.get('/creators/dashboard'),
   getDashboardStats: () => api.get('/creators/dashboard/stats'),
   getEarningsStats: () => api.get('/creators/dashboard/earnings'),
 };
