@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000/api';
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Create axios instance
 const api = axios.create({
@@ -76,6 +76,7 @@ export const creatorApi = {
   getPortfolio: (id) => api.get(`/creators/${id}/portfolio`),
   getReviews: (id) => api.get(`/creators/${id}/reviews`),
   getRateCards: (id) => api.get(`/creators/${id}/rate-cards`),
+  getAvailability: (id, params) => api.get(`/creators/${id}/availability`, { params }),
   // Protected
   getMyProfile: () => api.get('/creators/profile/me'),
   updateProfile: (data) => api.put('/creators/profile', data),
@@ -103,6 +104,11 @@ export const creatorApi = {
   // Categories
   getMyCategories: () => api.get('/creators/categories/my'),
   updateCategories: (categoryIds) => api.put('/creators/categories', { categoryIds }),
+  // Availability
+  getMyAvailability: () => api.get('/creators/availability/my'),
+  updateAvailability: (data) => api.put('/creators/availability', data),
+  addAvailabilitySlot: (data) => api.post('/creators/availability/slots', data),
+  deleteAvailabilitySlot: (id) => api.delete(`/creators/availability/slots/${id}`),
   // Dashboard
   getDashboard: () => api.get('/creators/dashboard'),
   getDashboardStats: () => api.get('/creators/dashboard/stats'),
@@ -156,7 +162,7 @@ export const requestApi = {
   getCreatorRequests: (params) => api.get('/requests/creator/received', { params }),
   getCreatorRequestDetail: (id) => api.get(`/requests/creator/${id}`),
   acceptRequest: (id) => api.put(`/requests/creator/${id}/accept`),
-  declineRequest: (id, reason) => api.put(`/requests/creator/${id}/decline`, { reason }),
+  declineRequest: (id, data) => api.put(`/requests/creator/${id}/decline`, data),
   sendCounterOffer: (id, data) => api.put(`/requests/creator/${id}/counter-offer`, data),
   submitContent: (id, contentUrls) => api.put(`/requests/creator/${id}/submit-content`, { contentUrls }),
   // Shared

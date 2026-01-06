@@ -1,11 +1,74 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { requestApi } from '../../api';
 import {
   FileText, Clock, CheckCircle2, XCircle, AlertCircle,
   Building2, Calendar, DollarSign, ChevronRight, Loader2,
-  Filter, Inbox, Eye, MessageSquare
+  Filter, Inbox, Eye, MessageSquare, Timer, AlertTriangle
 } from 'lucide-react';
+
+// Countdown Timer Component
+const CountdownTimer = ({ expiresAt }) => {
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  const calculateTimeLeft = useCallback(() => {
+    if (!expiresAt) return null;
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) {
+      return { expired: true };
+    }
+
+    const hours = Math.floor(difference / (1000 * 60 * 60));
+    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+    return { hours, minutes, seconds, expired: false };
+  }, [expiresAt]);
+
+  useEffect(() => {
+    setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [calculateTimeLeft]);
+
+  if (!timeLeft) return null;
+
+  if (timeLeft.expired) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+        <AlertTriangle className="w-4 h-4" />
+        Expired
+      </div>
+    );
+  }
+
+  // Determine urgency color
+  const totalHours = timeLeft.hours + (timeLeft.minutes / 60);
+  const isUrgent = totalHours < 6; // Less than 6 hours
+  const isCritical = totalHours < 2; // Less than 2 hours
+
+  const bgColor = isCritical ? 'bg-red-100' : isUrgent ? 'bg-orange-100' : 'bg-amber-50';
+  const textColor = isCritical ? 'text-red-700' : isUrgent ? 'text-orange-700' : 'text-amber-700';
+  const iconColor = isCritical ? 'text-red-500' : isUrgent ? 'text-orange-500' : 'text-amber-500';
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 ${bgColor} ${textColor} rounded-full text-sm font-medium`}>
+      <Timer className={`w-4 h-4 ${iconColor} ${isCritical ? 'animate-pulse' : ''}`} />
+      <span className="font-mono">
+        {String(timeLeft.hours).padStart(2, '0')}:
+        {String(timeLeft.minutes).padStart(2, '0')}:
+        {String(timeLeft.seconds).padStart(2, '0')}
+      </span>
+      <span className="text-xs opacity-75">left</span>
+    </div>
+  );
+};
 
 const statusOptions = [
   { value: '', label: 'All Requests' },
@@ -166,10 +229,16 @@ const Requests = () => {
                         </h3>
                         <p className="text-sm text-gray-500">{request.brand?.companyName}</p>
                       </div>
-                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.text}`}>
-                        <StatusIcon className="w-4 h-4" />
-                        {statusInfo.label}
-                      </span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Countdown Timer for pending/viewed requests */}
+                        {['pending', 'viewed'].includes(request.status) && request.expiresAt && (
+                          <CountdownTimer expiresAt={request.expiresAt} />
+                        )}
+                        <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.text}`}>
+                          <StatusIcon className="w-4 h-4" />
+                          {statusInfo.label}
+                        </span>
+                      </div>
                     </div>
 
                     <p className="text-gray-600 text-sm mb-4 line-clamp-2">

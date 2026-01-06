@@ -7,8 +7,66 @@ import {
   Award, TrendingUp, ChevronLeft, ChevronRight, CheckCircle2,
   Mail, Calendar, Clock, DollarSign, Briefcase, ExternalLink,
   Play, Image as ImageIcon, Globe, Send, AlertCircle, CheckCircle,
-  FileText, ArrowLeft
+  FileText, ArrowLeft, Ban
 } from 'lucide-react';
+
+// Helper to check if creator is suspended
+const isCreatorSuspended = (creator) => {
+  if (!creator?.suspendedUntil) return false;
+  return new Date(creator.suspendedUntil) > new Date();
+};
+
+// Suspension countdown component
+const SuspensionBadge = ({ suspendedUntil, compact = false }) => {
+  const [timeLeft, setTimeLeft] = useState('');
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      const now = new Date().getTime();
+      const expiry = new Date(suspendedUntil).getTime();
+      const difference = expiry - now;
+
+      if (difference <= 0) {
+        return 'Ended';
+      }
+
+      const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+
+      if (days > 0) {
+        return `${days}d ${hours}h`;
+      }
+      return `${hours}h ${minutes}m`;
+    };
+
+    setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, [suspendedUntil]);
+
+  if (compact) {
+    return (
+      <div className="flex items-center gap-1.5 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+        <Ban className="w-3 h-3" />
+        <span>Suspended</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">
+      <Ban className="w-5 h-5 text-red-500" />
+      <div>
+        <p className="text-sm font-medium text-red-700">Creator Suspended</p>
+        <p className="text-xs text-red-600">Available in {timeLeft}</p>
+      </div>
+    </div>
+  );
+};
 
 const Discover = () => {
   const [creators, setCreators] = useState([]);
@@ -121,15 +179,17 @@ const Discover = () => {
   const loadCreatorDetails = async (creatorId) => {
     setModalLoading(true);
     try {
-      const [profileRes, portfolioRes, rateCardsRes] = await Promise.all([
+      const [profileRes, portfolioRes, rateCardsRes, availabilityRes] = await Promise.all([
         creatorApi.getById(creatorId),
         creatorApi.getPortfolio(creatorId),
         creatorApi.getRateCards(creatorId),
+        creatorApi.getAvailability(creatorId),
       ]);
       setCreatorDetails({
         ...profileRes.data.data,
         portfolio: portfolioRes.data.data || [],
         rateCards: rateCardsRes.data.data || [],
+        availability: availabilityRes.data.data || {},
       });
     } catch (err) {
       console.error('Failed to load creator details:', err);
@@ -531,6 +591,13 @@ const Discover = () => {
                         {creator.tier}
                       </div>
                     )}
+
+                    {/* Suspension Badge */}
+                    {isCreatorSuspended(creator) && (
+                      <div className="absolute top-3 left-3">
+                        <SuspensionBadge suspendedUntil={creator.suspendedUntil} compact />
+                      </div>
+                    )}
                   </div>
 
                   {/* Content */}
@@ -860,15 +927,29 @@ const CreatorProfileModal = ({
                     >
                       <Heart className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
                     </button>
-                    <button
-                      onClick={onSendRequest}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
-                    >
-                      <Mail className="w-5 h-5" />
-                      Send Request
-                    </button>
+                    {isCreatorSuspended(data) ? (
+                      <div className="px-6 py-3 bg-red-100 text-red-700 rounded-xl font-semibold flex items-center gap-2 cursor-not-allowed">
+                        <Ban className="w-5 h-5" />
+                        Suspended
+                      </div>
+                    ) : (
+                      <button
+                        onClick={onSendRequest}
+                        className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors flex items-center gap-2"
+                      >
+                        <Mail className="w-5 h-5" />
+                        Send Request
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {/* Suspension Banner */}
+                {isCreatorSuspended(data) && (
+                  <div className="mt-4">
+                    <SuspensionBadge suspendedUntil={data.suspendedUntil} />
+                  </div>
+                )}
 
                 {/* Stats Row */}
                 <div className="grid grid-cols-4 gap-4 mt-6 p-4 bg-gray-50 rounded-2xl">
@@ -902,7 +983,7 @@ const CreatorProfileModal = ({
             {/* Tabs */}
             <div className="px-8 border-b border-gray-100">
               <div className="flex gap-6">
-                {['about', 'portfolio', 'services'].map((tab) => (
+                {['about', 'portfolio', 'services', 'availability'].map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -1056,6 +1137,10 @@ const CreatorProfileModal = ({
                   )}
                 </div>
               )}
+
+              {activeTab === 'availability' && (
+                <AvailabilityCalendar availability={data.availability} creatorName={data.displayName} />
+              )}
             </div>
 
             {/* Footer CTA */}
@@ -1101,10 +1186,66 @@ const SendRequestModal = ({
     endDate: '',
     selectedServices: [],
   });
+  const [dateConflict, setDateConflict] = useState(null);
+
+  // Get availability data
+  const availability = creator.availability || {};
+  const { isAvailable = true, leadTimeDays = 0, blockedSlots = [] } = availability;
+
+  // Check if selected dates conflict with blocked dates
+  const checkDateConflicts = (start, end) => {
+    if (!start || !end) return null;
+
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(0, 0, 0, 0);
+
+    // Check lead time
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const minStartDate = new Date(today);
+    minStartDate.setDate(minStartDate.getDate() + leadTimeDays);
+
+    if (startDate < minStartDate) {
+      return {
+        type: 'leadtime',
+        message: `${creator.displayName} requires at least ${leadTimeDays} days notice. Please select a start date after ${minStartDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`
+      };
+    }
+
+    // Check for conflicts with blocked dates
+    for (const slot of blockedSlots) {
+      const blockedStart = new Date(slot.startDate);
+      const blockedEnd = new Date(slot.endDate);
+      blockedStart.setHours(0, 0, 0, 0);
+      blockedEnd.setHours(0, 0, 0, 0);
+
+      // Check if date ranges overlap
+      if (startDate <= blockedEnd && endDate >= blockedStart) {
+        return {
+          type: 'blocked',
+          message: `Your selected dates conflict with the creator's blocked period (${blockedStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${blockedEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}).`
+        };
+      }
+    }
+
+    return null;
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    const newFormData = { ...formData, [name]: value };
+    setFormData(newFormData);
+
+    // Check for date conflicts when dates change
+    if (name === 'startDate' || name === 'endDate') {
+      const conflict = checkDateConflicts(
+        name === 'startDate' ? value : formData.startDate,
+        name === 'endDate' ? value : formData.endDate
+      );
+      setDateConflict(conflict);
+    }
   };
 
   const handleServiceToggle = (serviceId) => {
@@ -1118,12 +1259,23 @@ const SendRequestModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
+
+    // Prevent submission if there's a date conflict
+    if (dateConflict) {
+      return;
+    }
+
+    // Prevent submission if creator is unavailable
+    if (!isAvailable) {
+      return;
+    }
+
     onSubmit(formData);
   };
 
-  // Get minimum date for deadline (tomorrow)
+  // Get minimum date (tomorrow at minimum, or lead time if set)
   const minDate = new Date();
-  minDate.setDate(minDate.getDate() + 1);
+  minDate.setDate(minDate.getDate() + Math.max(1, leadTimeDays));
   const minDateStr = minDate.toISOString().split('T')[0];
 
   if (success) {
@@ -1209,6 +1361,17 @@ const SendRequestModal = ({
                 </div>
               )}
             </div>
+
+            {/* Creator Unavailable Warning */}
+            {!isAvailable && (
+              <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600">
+                <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">Creator Unavailable</p>
+                  <p className="text-sm">{creator.displayName} is not accepting new collaborations at this time.</p>
+                </div>
+              </div>
+            )}
 
             {error && (
               <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-red-600">
@@ -1339,7 +1502,9 @@ const SendRequestModal = ({
                   onChange={handleChange}
                   required
                   min={minDateStr}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    dateConflict ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                  }`}
                 />
               </div>
 
@@ -1355,10 +1520,26 @@ const SendRequestModal = ({
                   onChange={handleChange}
                   required
                   min={formData.startDate || minDateStr}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                    dateConflict ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                  }`}
                 />
               </div>
             </div>
+
+            {/* Date Conflict Warning */}
+            {dateConflict && (
+              <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-100 rounded-xl">
+                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-medium text-amber-800">Date Conflict</p>
+                  <p className="text-sm text-amber-700">{dateConflict.message}</p>
+                  <p className="text-sm text-amber-600 mt-1">
+                    Check the creator's <span className="font-medium">Availability</span> tab to see their calendar.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}
@@ -1373,13 +1554,23 @@ const SendRequestModal = ({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || dateConflict || !isAvailable}
                 className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {submitting ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
                     Sending...
+                  </>
+                ) : dateConflict ? (
+                  <>
+                    <AlertCircle className="w-5 h-5" />
+                    Fix Date Conflict
+                  </>
+                ) : !isAvailable ? (
+                  <>
+                    <AlertCircle className="w-5 h-5" />
+                    Creator Unavailable
                   </>
                 ) : (
                   <>
@@ -1392,6 +1583,267 @@ const SendRequestModal = ({
           </div>
         </form>
       </div>
+    </div>
+  );
+};
+
+// Availability Calendar Component for Brands to View Creator Availability
+const AvailabilityCalendar = ({ availability, creatorName }) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Get availability data with defaults
+  const {
+    isAvailable = true,
+    leadTimeDays = 0,
+    blockedSlots = []
+  } = availability || {};
+
+  // Calculate dates
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const leadTimeDate = new Date(today);
+  leadTimeDate.setDate(leadTimeDate.getDate() + leadTimeDays);
+
+  // Generate calendar days
+  const generateCalendarDays = () => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const startPadding = firstDay.getDay();
+    const totalDays = lastDay.getDate();
+
+    const days = [];
+
+    // Padding for start of month
+    for (let i = 0; i < startPadding; i++) {
+      days.push(null);
+    }
+
+    // Actual days
+    for (let day = 1; day <= totalDays; day++) {
+      days.push(new Date(year, month, day));
+    }
+
+    return days;
+  };
+
+  // Check if a date is blocked
+  const isDateBlocked = (date) => {
+    if (!date) return false;
+
+    return blockedSlots.some(slot => {
+      const startDate = new Date(slot.startDate);
+      const endDate = new Date(slot.endDate);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      return date >= startDate && date <= endDate;
+    });
+  };
+
+  // Check if date is in lead time period
+  const isInLeadTime = (date) => {
+    if (!date) return false;
+    return date >= today && date < leadTimeDate;
+  };
+
+  // Check if date is in the past
+  const isPastDate = (date) => {
+    if (!date) return false;
+    return date < today;
+  };
+
+  // Get date status for styling
+  const getDateStatus = (date) => {
+    if (!date) return 'empty';
+    if (isPastDate(date)) return 'past';
+    if (isDateBlocked(date)) return 'blocked';
+    if (isInLeadTime(date)) return 'leadtime';
+    return 'available';
+  };
+
+  // Calculate available weeks in next 2 months
+  const calculateAvailableWeeks = () => {
+    const checkDate = new Date(today);
+    const twoMonthsLater = new Date(today);
+    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+
+    let availableDays = 0;
+    while (checkDate <= twoMonthsLater) {
+      if (!isDateBlocked(checkDate) && !isInLeadTime(checkDate)) {
+        availableDays++;
+      }
+      checkDate.setDate(checkDate.getDate() + 1);
+    }
+
+    return Math.floor(availableDays / 7);
+  };
+
+  const availableWeeks = calculateAvailableWeeks();
+  const hasEnoughAvailability = availableWeeks >= 2;
+
+  const days = generateCalendarDays();
+  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const prevMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1));
+  };
+
+  const nextMonth = () => {
+    setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1));
+  };
+
+  // Don't allow navigating to past months
+  const canGoPrev = currentMonth > new Date(today.getFullYear(), today.getMonth(), 1);
+
+  if (!isAvailable) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <Calendar className="w-8 h-8 text-red-500" />
+        </div>
+        <h3 className="font-semibold text-gray-900 mb-2">Currently Unavailable</h3>
+        <p className="text-gray-500">
+          {creatorName} is not accepting new collaborations at this time.
+        </p>
+        <p className="text-sm text-gray-400 mt-2">
+          Check back later or save this creator to get notified when they're available.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Availability Status Banner */}
+      <div className={`p-4 rounded-2xl ${hasEnoughAvailability ? 'bg-green-50 border border-green-100' : 'bg-amber-50 border border-amber-100'}`}>
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-xl ${hasEnoughAvailability ? 'bg-green-100' : 'bg-amber-100'}`}>
+            {hasEnoughAvailability ? (
+              <CheckCircle className="w-5 h-5 text-green-600" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+            )}
+          </div>
+          <div>
+            <h4 className={`font-semibold ${hasEnoughAvailability ? 'text-green-900' : 'text-amber-900'}`}>
+              {hasEnoughAvailability
+                ? `${availableWeeks} weeks available`
+                : 'Limited availability'}
+            </h4>
+            <p className={`text-sm ${hasEnoughAvailability ? 'text-green-700' : 'text-amber-700'}`}>
+              {hasEnoughAvailability
+                ? `${creatorName} has good availability for new collaborations.`
+                : `${creatorName} has less than 2 weeks available in the next 2 months.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Calendar */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        {/* Calendar Header */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 border-b border-gray-200">
+          <button
+            onClick={prevMonth}
+            disabled={!canGoPrev}
+            className="p-2 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <h3 className="font-semibold text-gray-900">
+            {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+          </h3>
+          <button
+            onClick={nextMonth}
+            className="p-2 hover:bg-gray-200 rounded-xl transition-colors"
+          >
+            <ChevronRight className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+
+        {/* Weekday Headers */}
+        <div className="grid grid-cols-7 border-b border-gray-200">
+          {weekDays.map(day => (
+            <div key={day} className="p-2 text-center text-sm font-medium text-gray-500">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar Grid */}
+        <div className="grid grid-cols-7">
+          {days.map((date, idx) => {
+            const status = getDateStatus(date);
+
+            return (
+              <div
+                key={idx}
+                className={`aspect-square p-1 border-b border-r border-gray-100 ${
+                  idx % 7 === 0 ? 'border-l' : ''
+                }`}
+              >
+                {date && (
+                  <div
+                    className={`w-full h-full flex items-center justify-center rounded-lg text-sm font-medium ${
+                      status === 'available' ? 'text-green-700 bg-green-50' :
+                      status === 'blocked' ? 'text-red-600 bg-red-50' :
+                      status === 'leadtime' ? 'text-blue-600 bg-blue-50' :
+                      status === 'past' ? 'text-gray-300' : ''
+                    }`}
+                  >
+                    {date.getDate()}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-4">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded bg-green-50 border border-green-200" />
+          <span className="text-sm text-gray-600">Available</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded bg-red-50 border border-red-200" />
+          <span className="text-sm text-gray-600">Blocked/Booked</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded bg-gray-100 border border-gray-200" />
+          <span className="text-sm text-gray-600">Past dates</span>
+        </div>
+      </div>
+
+      {/* Upcoming Blocked Periods */}
+      {blockedSlots.length > 0 && (
+        <div>
+          <h4 className="font-medium text-gray-900 mb-3">Blocked Periods</h4>
+          <div className="space-y-2">
+            {blockedSlots
+              .filter(slot => new Date(slot.endDate) >= today)
+              .slice(0, 5)
+              .map((slot, idx) => (
+                <div key={idx} className="flex items-center gap-3 p-3 bg-red-50 rounded-xl">
+                  <Calendar className="w-4 h-4 text-red-500" />
+                  <span className="text-sm text-red-700">
+                    {new Date(slot.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {' — '}
+                    {new Date(slot.endDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {slot.reason && ` (${slot.reason})`}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

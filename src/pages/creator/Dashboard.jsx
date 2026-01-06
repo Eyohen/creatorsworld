@@ -1,12 +1,138 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { creatorApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import {
   Wallet, Clock, Briefcase, Eye, FileText, MessageSquare,
   DollarSign, ArrowRight, TrendingUp, Star, Award, Sparkles,
-  CheckCircle2, AlertCircle, Loader2
+  CheckCircle2, AlertCircle, Loader2, Ban, Timer
 } from 'lucide-react';
+
+// Suspension Countdown Banner - Large and Bold
+const SuspensionBanner = ({ suspendedUntil }) => {
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  const calculateTimeLeft = useCallback(() => {
+    if (!suspendedUntil) return null;
+    const now = new Date().getTime();
+    const expiry = new Date(suspendedUntil).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) {
+      return { expired: true };
+    }
+
+    const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+    return { days, hours, minutes, seconds, expired: false };
+  }, [suspendedUntil]);
+
+  useEffect(() => {
+    setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [calculateTimeLeft]);
+
+  if (!timeLeft || timeLeft.expired) return null;
+
+  return (
+    <div className="relative overflow-hidden bg-gradient-to-br from-red-600 via-red-700 to-red-800 rounded-3xl p-8 mb-6 shadow-2xl shadow-red-500/30">
+      {/* Decorative elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-black/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
+
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center animate-pulse">
+            <Ban className="w-8 h-8 text-white" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold text-white">Account Suspended</h2>
+            <p className="text-red-200 text-lg">
+              You declined 2 collaboration requests
+            </p>
+          </div>
+        </div>
+
+        {/* Big Countdown Timer */}
+        <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 mb-6">
+          <p className="text-center text-red-200 text-sm font-medium uppercase tracking-wider mb-4">
+            Suspension ends in
+          </p>
+          <div className="flex items-center justify-center gap-4 md:gap-8">
+            {/* Days */}
+            <div className="text-center">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 md:px-8 md:py-6 mb-2">
+                <span className="text-5xl md:text-7xl font-bold text-white font-mono tracking-tight">
+                  {String(timeLeft.days).padStart(2, '0')}
+                </span>
+              </div>
+              <span className="text-red-200 text-sm md:text-base font-medium uppercase tracking-wider">Days</span>
+            </div>
+
+            <span className="text-4xl md:text-6xl font-bold text-white/50 -mt-8">:</span>
+
+            {/* Hours */}
+            <div className="text-center">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 md:px-8 md:py-6 mb-2">
+                <span className="text-5xl md:text-7xl font-bold text-white font-mono tracking-tight">
+                  {String(timeLeft.hours).padStart(2, '0')}
+                </span>
+              </div>
+              <span className="text-red-200 text-sm md:text-base font-medium uppercase tracking-wider">Hours</span>
+            </div>
+
+            <span className="text-4xl md:text-6xl font-bold text-white/50 -mt-8">:</span>
+
+            {/* Minutes */}
+            <div className="text-center">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 md:px-8 md:py-6 mb-2">
+                <span className="text-5xl md:text-7xl font-bold text-white font-mono tracking-tight">
+                  {String(timeLeft.minutes).padStart(2, '0')}
+                </span>
+              </div>
+              <span className="text-red-200 text-sm md:text-base font-medium uppercase tracking-wider">Minutes</span>
+            </div>
+
+            <span className="text-4xl md:text-6xl font-bold text-white/50 -mt-8">:</span>
+
+            {/* Seconds */}
+            <div className="text-center">
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl px-4 py-3 md:px-8 md:py-6 mb-2 relative overflow-hidden">
+                <span className="text-5xl md:text-7xl font-bold text-white font-mono tracking-tight">
+                  {String(timeLeft.seconds).padStart(2, '0')}
+                </span>
+                {/* Pulsing animation for seconds */}
+                <div className="absolute inset-0 bg-white/10 animate-ping rounded-2xl" style={{ animationDuration: '1s' }} />
+              </div>
+              <span className="text-red-200 text-sm md:text-base font-medium uppercase tracking-wider">Seconds</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Info text */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-200 flex-shrink-0 mt-0.5" />
+          <div className="text-red-100 text-sm">
+            <p className="font-medium mb-1">During suspension:</p>
+            <ul className="list-disc list-inside space-y-1 text-red-200">
+              <li>Brands cannot send you new collaboration requests</li>
+              <li>Your profile is still visible but marked as unavailable</li>
+              <li>Existing collaborations are not affected</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const { user, profile } = useAuth();
@@ -88,8 +214,14 @@ const Dashboard = () => {
     );
   }
 
+  // Check if creator is suspended
+  const isSuspended = profile?.suspendedUntil && new Date(profile.suspendedUntil) > new Date();
+
   return (
     <div className="space-y-6">
+      {/* Suspension Banner */}
+      {isSuspended && <SuspensionBanner suspendedUntil={profile.suspendedUntil} />}
+
       {/* Welcome Banner */}
       <div className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-3xl p-8">
         {/* Decorative elements */}

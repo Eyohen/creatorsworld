@@ -4,7 +4,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, User, Image, CreditCard, FileText, Wallet,
   MessageSquare, Settings, LogOut, Menu, X, Bell, ChevronDown,
-  Sparkles, Star, TrendingUp, Award
+  Sparkles, Star, TrendingUp, Award, Calendar
 } from 'lucide-react';
 
 const CreatorLayout = () => {
@@ -23,6 +23,7 @@ const CreatorLayout = () => {
     { path: '/creator/profile', label: 'Profile', icon: User },
     { path: '/creator/portfolio', label: 'Portfolio', icon: Image },
     { path: '/creator/rate-cards', label: 'Rate Cards', icon: CreditCard },
+    { path: '/creator/availability', label: 'Availability', icon: Calendar },
     { path: '/creator/requests', label: 'Requests', icon: FileText },
     { path: '/creator/earnings', label: 'Earnings', icon: Wallet },
     { path: '/creator/messages', label: 'Messages', icon: MessageSquare },

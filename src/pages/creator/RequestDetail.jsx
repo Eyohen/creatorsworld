@@ -1,11 +1,114 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { requestApi } from '../../api';
 import {
   ArrowLeft, Building2, Calendar, DollarSign, Clock, CheckCircle2,
   XCircle, AlertCircle, FileText, Loader2, MessageSquare, Eye,
-  Send, ThumbsUp, ThumbsDown, User
+  Send, ThumbsUp, ThumbsDown, User, Timer, AlertTriangle
 } from 'lucide-react';
+
+// Countdown Timer Component
+const CountdownTimer = ({ expiresAt, large = false }) => {
+  const [timeLeft, setTimeLeft] = useState(null);
+
+  const calculateTimeLeft = useCallback(() => {
+    if (!expiresAt) return null;
+    const now = new Date().getTime();
+    const expiry = new Date(expiresAt).getTime();
+    const difference = expiry - now;
+
+    if (difference <= 0) {
+      return { expired: true };
+    }
+
+    const hours = Math.floor(difference / (1000 * 60 * 60));
+    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+    return { hours, minutes, seconds, expired: false };
+  }, [expiresAt]);
+
+  useEffect(() => {
+    setTimeLeft(calculateTimeLeft());
+    const timer = setInterval(() => {
+      setTimeLeft(calculateTimeLeft());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [calculateTimeLeft]);
+
+  if (!timeLeft) return null;
+
+  if (timeLeft.expired) {
+    return (
+      <div className={`flex items-center gap-2 ${large ? 'p-4 rounded-2xl' : 'px-3 py-1.5 rounded-full'} bg-red-100 text-red-700 font-medium`}>
+        <AlertTriangle className={large ? 'w-6 h-6' : 'w-4 h-4'} />
+        <span className={large ? 'text-lg' : 'text-sm'}>Request Expired</span>
+      </div>
+    );
+  }
+
+  // Determine urgency color
+  const totalHours = timeLeft.hours + (timeLeft.minutes / 60);
+  const isUrgent = totalHours < 6;
+  const isCritical = totalHours < 2;
+
+  const bgColor = isCritical ? 'bg-red-100' : isUrgent ? 'bg-orange-100' : 'bg-amber-50';
+  const textColor = isCritical ? 'text-red-700' : isUrgent ? 'text-orange-700' : 'text-amber-700';
+  const borderColor = isCritical ? 'border-red-200' : isUrgent ? 'border-orange-200' : 'border-amber-200';
+
+  if (large) {
+    return (
+      <div className={`${bgColor} ${textColor} border ${borderColor} rounded-2xl p-6`}>
+        <div className="flex items-center gap-3 mb-3">
+          <Timer className={`w-6 h-6 ${isCritical ? 'animate-pulse' : ''}`} />
+          <span className="font-semibold text-lg">Time to Respond</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="text-center">
+            <div className="text-4xl font-bold font-mono">{String(timeLeft.hours).padStart(2, '0')}</div>
+            <div className="text-sm opacity-75">Hours</div>
+          </div>
+          <div className="text-3xl font-bold">:</div>
+          <div className="text-center">
+            <div className="text-4xl font-bold font-mono">{String(timeLeft.minutes).padStart(2, '0')}</div>
+            <div className="text-sm opacity-75">Minutes</div>
+          </div>
+          <div className="text-3xl font-bold">:</div>
+          <div className="text-center">
+            <div className="text-4xl font-bold font-mono">{String(timeLeft.seconds).padStart(2, '0')}</div>
+            <div className="text-sm opacity-75">Seconds</div>
+          </div>
+        </div>
+        <p className="mt-4 text-sm opacity-75">
+          Please accept or decline this request before the timer expires.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-1.5 ${bgColor} ${textColor} rounded-full text-sm font-medium`}>
+      <Timer className={`w-4 h-4 ${isCritical ? 'animate-pulse' : ''}`} />
+      <span className="font-mono">
+        {String(timeLeft.hours).padStart(2, '0')}:
+        {String(timeLeft.minutes).padStart(2, '0')}:
+        {String(timeLeft.seconds).padStart(2, '0')}
+      </span>
+      <span className="text-xs opacity-75">left</span>
+    </div>
+  );
+};
+
+// Decline reason categories
+const declineCategories = [
+  { value: 'schedule', label: 'Schedule Conflict', description: 'I have other commitments during this period' },
+  { value: 'budget', label: 'Budget Too Low', description: 'The offered budget doesn\'t meet my rates' },
+  { value: 'niche', label: 'Not My Niche', description: 'This campaign doesn\'t align with my content' },
+  { value: 'brand_fit', label: 'Brand Mismatch', description: 'This brand doesn\'t fit my audience' },
+  { value: 'requirements', label: 'Requirements Unclear', description: 'The campaign requirements are not clear enough' },
+  { value: 'other', label: 'Other Reason', description: 'Another reason not listed above' },
+];
 
 const RequestDetail = () => {
   const { id } = useParams();
@@ -16,6 +119,8 @@ const RequestDetail = () => {
   const [error, setError] = useState('');
   const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
+  const [declineCategory, setDeclineCategory] = useState('');
+  const [declineError, setDeclineError] = useState('');
 
   useEffect(() => {
     loadRequest();
@@ -47,15 +152,44 @@ const RequestDetail = () => {
     }
   };
 
+  const [suspensionWarning, setSuspensionWarning] = useState(null);
+
   const handleDecline = async () => {
+    // Validate decline reason
+    if (!declineCategory) {
+      setDeclineError('Please select a reason category');
+      return;
+    }
+    if (!declineReason || declineReason.trim().length < 10) {
+      setDeclineError('Please provide a detailed reason (at least 10 characters)');
+      return;
+    }
+
+    setDeclineError('');
     setActionLoading(true);
     try {
-      await requestApi.declineRequest(id, declineReason);
+      const { data } = await requestApi.declineRequest(id, { reason: declineReason.trim(), category: declineCategory });
       await loadRequest();
       setShowDeclineModal(false);
+      setDeclineReason('');
+      setDeclineCategory('');
+
+      // Check if suspended or warning
+      if (data.suspended) {
+        setSuspensionWarning({
+          type: 'suspended',
+          message: data.message,
+          suspendedUntil: data.suspendedUntil
+        });
+      } else if (data.warning) {
+        setSuspensionWarning({
+          type: 'warning',
+          message: data.warning
+        });
+      }
     } catch (err) {
       console.error('Failed to decline request:', err);
-      setError(err.response?.data?.message || 'Failed to decline request');
+      setDeclineError(err.response?.data?.message || 'Failed to decline request');
     } finally {
       setActionLoading(false);
     }
@@ -154,10 +288,16 @@ const RequestDetail = () => {
                   )}
                 </div>
               </div>
-              <span className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.text}`}>
-                <StatusIcon className="w-4 h-4" />
-                {statusInfo.label}
-              </span>
+              <div className="flex items-center gap-3">
+                {/* Countdown Timer */}
+                {['pending', 'viewed'].includes(request?.status) && request?.expiresAt && (
+                  <CountdownTimer expiresAt={request.expiresAt} />
+                )}
+                <span className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium ${statusInfo.bg} ${statusInfo.text}`}>
+                  <StatusIcon className="w-4 h-4" />
+                  {statusInfo.label}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -273,6 +413,11 @@ const RequestDetail = () => {
         </div>
       </div>
 
+      {/* Countdown Timer - Large version */}
+      {canRespond && request?.expiresAt && (
+        <CountdownTimer expiresAt={request.expiresAt} large />
+      )}
+
       {/* Action Buttons */}
       {canRespond && (
         <div className="bg-white rounded-2xl border border-gray-100 p-6">
@@ -341,41 +486,136 @@ const RequestDetail = () => {
         </div>
       )}
 
+      {/* Suspension Warning Modal */}
+      {suspensionWarning && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSuspensionWarning(null)}
+          />
+          <div className={`relative rounded-2xl max-w-md w-full p-6 shadow-2xl ${
+            suspensionWarning.type === 'suspended' ? 'bg-red-600' : 'bg-amber-500'
+          }`}>
+            <div className="text-center">
+              <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
+                suspensionWarning.type === 'suspended' ? 'bg-white/20' : 'bg-white/30'
+              }`}>
+                {suspensionWarning.type === 'suspended' ? (
+                  <AlertTriangle className="w-8 h-8 text-white" />
+                ) : (
+                  <AlertCircle className="w-8 h-8 text-white" />
+                )}
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                {suspensionWarning.type === 'suspended' ? 'Account Suspended' : 'Warning'}
+              </h3>
+              <p className="text-white/90 mb-6">
+                {suspensionWarning.message}
+              </p>
+              {suspensionWarning.type === 'suspended' && suspensionWarning.suspendedUntil && (
+                <p className="text-white/80 text-sm mb-4">
+                  Suspension ends: {new Date(suspensionWarning.suspendedUntil).toLocaleString()}
+                </p>
+              )}
+              <button
+                onClick={() => setSuspensionWarning(null)}
+                className={`px-6 py-3 rounded-xl font-semibold ${
+                  suspensionWarning.type === 'suspended'
+                    ? 'bg-white text-red-600 hover:bg-red-50'
+                    : 'bg-white text-amber-600 hover:bg-amber-50'
+                } transition-colors`}
+              >
+                {suspensionWarning.type === 'suspended' ? 'Go to Dashboard' : 'I Understand'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Decline Modal */}
       {showDeclineModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            onClick={() => setShowDeclineModal(false)}
+            onClick={() => { setShowDeclineModal(false); setDeclineError(''); }}
           />
-          <div className="relative bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
+          <div className="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 className="text-xl font-bold text-gray-900 mb-2">Decline Request</h3>
-            <p className="text-gray-600 mb-4">
-              Are you sure you want to decline this request? You can optionally provide a reason.
+            <p className="text-gray-600 mb-6">
+              Please let the brand know why you're declining this request. This feedback helps them improve future campaigns.
             </p>
-            <textarea
-              value={declineReason}
-              onChange={(e) => setDeclineReason(e.target.value)}
-              placeholder="Reason for declining (optional)"
-              rows={3}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none mb-4"
-            />
+
+            {declineError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {declineError}
+              </div>
+            )}
+
+            {/* Reason Category */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Why are you declining? <span className="text-red-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {declineCategories.map((cat) => (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    onClick={() => setDeclineCategory(cat.value)}
+                    className={`p-3 text-left border rounded-xl transition-all ${
+                      declineCategory === cat.value
+                        ? 'border-red-500 bg-red-50 ring-2 ring-red-500'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <p className={`font-medium text-sm ${declineCategory === cat.value ? 'text-red-700' : 'text-gray-900'}`}>
+                      {cat.label}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${declineCategory === cat.value ? 'text-red-600' : 'text-gray-500'}`}>
+                      {cat.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Detailed Reason */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional details <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="Please provide more details about why you're declining (minimum 10 characters)..."
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                {declineReason.length}/10 characters minimum
+              </p>
+            </div>
+
             <div className="flex gap-3">
               <button
-                onClick={() => setShowDeclineModal(false)}
-                className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                onClick={() => { setShowDeclineModal(false); setDeclineError(''); }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDecline}
                 disabled={actionLoading}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
               >
                 {actionLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : (
-                  'Decline Request'
+                  <>
+                    <XCircle className="w-5 h-5" />
+                    Decline Request
+                  </>
                 )}
               </button>
             </div>

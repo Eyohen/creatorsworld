@@ -29,6 +29,7 @@ import CreatorRateCards from './pages/creator/RateCards';
 import CreatorRequests from './pages/creator/Requests';
 import CreatorRequestDetail from './pages/creator/RequestDetail';
 import CreatorEarnings from './pages/creator/Earnings';
+import CreatorAvailability from './pages/creator/Availability';
 import CreatorMessages from './pages/creator/Messages';
 import CreatorSettings from './pages/creator/Settings';
 
@@ -168,6 +169,10 @@ function AppRoutes() {
         <Route
           path="/creator/earnings"
           element={<ProtectedRoute allowedTypes={['creator']}><CreatorEarnings /></ProtectedRoute>}
+        />
+        <Route
+          path="/creator/availability"
+          element={<ProtectedRoute allowedTypes={['creator']}><CreatorAvailability /></ProtectedRoute>}
         />
         <Route
           path="/creator/messages"

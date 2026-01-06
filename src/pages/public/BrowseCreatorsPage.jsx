@@ -478,10 +478,10 @@ const BrowseCreatorsPage = () => {
               <button
                 key={category}
                 onClick={() => handleCategoryChange(category)}
-                className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
+                className={`px-4 py-2 text-sm font-thin rounded-full transition-all duration-300 ${
                   activeCategory === category
                     ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                    : 'text-gray-600 hover:bg-gray-100'
                 }`}
               >
                 {category}
