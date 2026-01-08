@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext';
 import { authApi, brandApi, uploadApi } from '../../api';
 
 const Settings = () => {
-  const { user, refreshProfile, logout } = useAuth();
+  const { user, profile, refreshProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('company');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -16,10 +16,10 @@ const Settings = () => {
     description: '',
   });
 
-  // Account settings
+  // Account settings (contact person)
   const [accountForm, setAccountForm] = useState({
-    firstName: '',
-    lastName: '',
+    contactFirstName: '',
+    contactLastName: '',
   });
 
   // Password change
@@ -30,20 +30,18 @@ const Settings = () => {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && profile) {
       setAccountForm({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
+        contactFirstName: profile.contactFirstName || '',
+        contactLastName: profile.contactLastName || '',
       });
-      if (user.brand) {
-        setCompanyForm({
-          companyName: user.brand.companyName || '',
-          website: user.brand.website || '',
-          description: user.brand.description || '',
-        });
-      }
+      setCompanyForm({
+        companyName: profile.companyName || '',
+        website: profile.website || '',
+        description: profile.description || '',
+      });
     }
-  }, [user]);
+  }, [user, profile]);
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files[0];
@@ -86,7 +84,7 @@ const Settings = () => {
     setSuccess('');
 
     try {
-      await authApi.updateProfile(accountForm);
+      await brandApi.updateProfile(accountForm);
       await refreshProfile();
       setSuccess('Account updated!');
     } catch (err) {
@@ -169,8 +167,8 @@ const Settings = () => {
               {/* Logo */}
               <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-xl bg-gray-200 flex items-center justify-center overflow-hidden">
-                  {user?.brand?.logoUrl ? (
-                    <img src={user.brand.logoUrl} alt="" className="w-full h-full object-cover" />
+                  {profile?.logo ? (
+                    <img src={profile.logo} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-gray-500 text-3xl">{companyForm.companyName?.[0]}</span>
                   )}
@@ -227,23 +225,26 @@ const Settings = () => {
           {/* Account Tab */}
           {activeTab === 'account' && (
             <form onSubmit={handleAccountSubmit} className="space-y-4">
+              <p className="text-sm text-gray-500 mb-4">Contact person details</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
                   <input
                     type="text"
-                    value={accountForm.firstName}
-                    onChange={(e) => setAccountForm({ ...accountForm, firstName: e.target.value })}
+                    value={accountForm.contactFirstName}
+                    onChange={(e) => setAccountForm({ ...accountForm, contactFirstName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    placeholder="Contact first name"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
                   <input
                     type="text"
-                    value={accountForm.lastName}
-                    onChange={(e) => setAccountForm({ ...accountForm, lastName: e.target.value })}
+                    value={accountForm.contactLastName}
+                    onChange={(e) => setAccountForm({ ...accountForm, contactLastName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    placeholder="Contact last name"
                   />
                 </div>
               </div>
@@ -255,6 +256,7 @@ const Settings = () => {
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50"
                   disabled
                 />
+                <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
               </div>
               <button
                 type="submit"
@@ -316,39 +318,39 @@ const Settings = () => {
               <div className="bg-blue-100 p-6 rounded-xl">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-xl text-gray-900">
-                    {user?.brand?.tier === 'starter' ? 'Starter' :
-                     user?.brand?.tier === 'growth' ? 'Growth' :
-                     user?.brand?.tier === 'business' ? 'Business' : 'Enterprise'} Plan
+                    {profile?.tier === 'starter' ? 'Starter' :
+                     profile?.tier === 'growth' ? 'Growth' :
+                     profile?.tier === 'business' ? 'Business' : 'Enterprise'} Plan
                   </h3>
                   <span className="text-blue-600 font-semibold">
-                    {user?.brand?.tier === 'starter' ? 'Free' :
-                     user?.brand?.tier === 'growth' ? '₦15,000/mo' :
-                     user?.brand?.tier === 'business' ? '₦45,000/mo' : 'Custom'}
+                    {profile?.tier === 'starter' ? 'Free' :
+                     profile?.tier === 'growth' ? '₦15,000/mo' :
+                     profile?.tier === 'business' ? '₦45,000/mo' : 'Custom'}
                   </span>
                 </div>
                 <ul className="text-sm text-gray-600 space-y-2">
-                  {user?.brand?.tier === 'starter' && (
+                  {profile?.tier === 'starter' && (
                     <>
                       <li>• 10 messages per month</li>
                       <li>• 1 active campaign</li>
                       <li>• 15% platform fee</li>
                     </>
                   )}
-                  {user?.brand?.tier === 'growth' && (
+                  {profile?.tier === 'growth' && (
                     <>
                       <li>• 50 messages per month</li>
                       <li>• 5 active campaigns</li>
                       <li>• 12% platform fee</li>
                     </>
                   )}
-                  {user?.brand?.tier === 'business' && (
+                  {profile?.tier === 'business' && (
                     <>
                       <li>• 200 messages per month</li>
                       <li>• 20 active campaigns</li>
                       <li>• 10% platform fee</li>
                     </>
                   )}
-                  {user?.brand?.tier === 'enterprise' && (
+                  {profile?.tier === 'enterprise' && (
                     <>
                       <li>• Unlimited messages</li>
                       <li>• Unlimited campaigns</li>
@@ -358,9 +360,9 @@ const Settings = () => {
                 </ul>
               </div>
 
-              {user?.brand?.tier !== 'enterprise' && (
+              {profile?.tier !== 'enterprise' && (
                 <div className="grid md:grid-cols-3 gap-4">
-                  {user?.brand?.tier === 'starter' && (
+                  {profile?.tier === 'starter' && (
                     <div className="border-2 border-blue-600 rounded-xl p-4">
                       <h4 className="font-semibold text-gray-900">Growth</h4>
                       <p className="text-xl font-semibold text-blue-600 my-2">₦15,000/mo</p>
@@ -374,7 +376,7 @@ const Settings = () => {
                       </button>
                     </div>
                   )}
-                  {(user?.brand?.tier === 'starter' || user?.brand?.tier === 'growth') && (
+                  {(profile?.tier === 'starter' || profile?.tier === 'growth') && (
                     <div className="border-2 border-gray-200 rounded-xl p-4">
                       <h4 className="font-semibold text-gray-900">Business</h4>
                       <p className="text-xl font-semibold text-gray-900 my-2">₦45,000/mo</p>

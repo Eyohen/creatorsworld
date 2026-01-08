@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { paymentApi } from '../../api';
+import {
+  Wallet, TrendingUp, Clock, ArrowUpRight, ArrowDownRight,
+  Shield, ChevronRight, AlertCircle, CheckCircle2, Loader2,
+  CreditCard, Building2, X
+} from 'lucide-react';
 
 const Earnings = () => {
   const [stats, setStats] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [payouts, setPayouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [payoutAmount, setPayoutAmount] = useState('');
   const [selectedAccount, setSelectedAccount] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [payoutLoading, setPayoutLoading] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -18,19 +26,39 @@ const Earnings = () => {
 
   const loadData = async () => {
     try {
-      const [earningsRes, transactionsRes, accountsRes] = await Promise.all([
+      const [earningsRes, transactionsRes, accountsRes, payoutsRes] = await Promise.all([
         paymentApi.getEarnings(),
         paymentApi.getTransactions(),
         paymentApi.getBankAccounts(),
+        paymentApi.getPayoutHistory(),
       ]);
       setStats(earningsRes.data.data);
       setTransactions(transactionsRes.data.data.transactions || []);
       setBankAccounts(accountsRes.data.data || []);
+      setPayouts(payoutsRes.data.data || []);
     } catch (err) {
       console.error('Failed to load data:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-NG', {
+      style: 'currency',
+      currency: 'NGN',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount || 0);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-NG', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   const handleRequestPayout = async (e) => {
@@ -54,122 +82,241 @@ const Earnings = () => {
       return;
     }
 
+    setPayoutLoading(true);
     try {
       await paymentApi.requestPayout({ amount, bankAccountId: selectedAccount });
-      setSuccess('Payout request submitted successfully!');
+      setSuccess('Payout request submitted successfully! You will receive funds within 1-3 business days.');
       setShowPayoutModal(false);
       setPayoutAmount('');
+      setSelectedAccount('');
       loadData();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to request payout');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const getPayoutStatusBadge = (status) => {
+    switch (status) {
+      case 'pending':
+        return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending' };
+      case 'processing':
+        return { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Processing' };
+      case 'completed':
+        return { bg: 'bg-green-100', text: 'text-green-700', label: 'Completed' };
+      case 'failed':
+        return { bg: 'bg-red-100', text: 'text-red-700', label: 'Failed' };
+      default:
+        return { bg: 'bg-gray-100', text: 'text-gray-700', label: status };
     }
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <Loader2 className="w-10 h-10 text-green-600 animate-spin" />
+        <p className="text-gray-500">Loading earnings...</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="font-semibold text-3xl text-gray-900">Earnings</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="font-semibold text-3xl text-gray-900">Earnings</h1>
+        <Link
+          to="/creator/settings"
+          className="text-green-600 hover:text-green-700 text-sm font-medium flex items-center gap-1"
+        >
+          <Building2 className="w-4 h-4" />
+          Manage Bank Accounts
+        </Link>
+      </div>
 
       {success && (
-        <div className="bg-green-100 text-green-700 px-4 py-3 rounded-lg">
-          {success}
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center gap-3">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
+          <p>{success}</p>
+          <button onClick={() => setSuccess('')} className="ml-auto">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow p-6">
-          <p className="text-gray-500 text-sm">Available Balance</p>
-          <p className="font-semibold text-3xl text-green-600">
-            ₦{(stats?.availableBalance || 0).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-6">
-          <p className="text-gray-500 text-sm">Pending</p>
-          <p className="font-semibold text-3xl text-gray-900">
-            ₦{(stats?.pendingBalance || 0).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-6">
-          <p className="text-gray-500 text-sm">Total Earned</p>
-          <p className="font-semibold text-3xl text-gray-900">
-            ₦{(stats?.totalEarnings || 0).toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl shadow p-6">
-          <p className="text-gray-500 text-sm">Total Withdrawn</p>
-          <p className="font-semibold text-3xl text-gray-900">
-            ₦{(stats?.totalWithdrawn || 0).toLocaleString()}
-          </p>
-        </div>
-      </div>
-
-      {/* Payout Button */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="font-semibold text-gray-900">Request Payout</h2>
-            <p className="text-sm text-gray-500">
-              Minimum payout: ₦5,000 • Processing: 1-3 business days
-            </p>
+      {/* Main Balance Card */}
+      <div className="bg-gradient-to-br from-green-600 to-green-700 rounded-2xl p-6 text-white">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <Wallet className="w-6 h-6" />
           </div>
+          <div>
+            <p className="text-green-100 text-sm">Available Balance</p>
+            <p className="text-3xl font-bold">{formatCurrency(stats?.availableBalance)}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
           <button
             onClick={() => setShowPayoutModal(true)}
             disabled={(stats?.availableBalance || 0) < 5000}
-            className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-white text-green-700 px-6 py-3 rounded-xl font-semibold hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
           >
-            Request Payout
+            <CreditCard className="w-5 h-5" />
+            Withdraw Funds
           </button>
+        </div>
+        {(stats?.availableBalance || 0) < 5000 && (stats?.availableBalance || 0) > 0 && (
+          <p className="text-green-100 text-sm mt-3">
+            Minimum withdrawal: {formatCurrency(5000)}. You need {formatCurrency(5000 - (stats?.availableBalance || 0))} more.
+          </p>
+        )}
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <Shield className="w-5 h-5 text-blue-600" />
+            </div>
+            <p className="text-gray-500 text-sm">In Escrow</p>
+          </div>
+          <p className="font-bold text-2xl text-gray-900">{formatCurrency(stats?.pendingBalance || stats?.pendingEarnings)}</p>
+          <p className="text-xs text-gray-400 mt-1">Awaiting brand approval</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-green-600" />
+            </div>
+            <p className="text-gray-500 text-sm">Total Earned</p>
+          </div>
+          <p className="font-bold text-2xl text-gray-900">{formatCurrency(stats?.totalEarnings)}</p>
+          <p className="text-xs text-gray-400 mt-1">Lifetime earnings</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+              <ArrowUpRight className="w-5 h-5 text-purple-600" />
+            </div>
+            <p className="text-gray-500 text-sm">Total Withdrawn</p>
+          </div>
+          <p className="font-bold text-2xl text-gray-900">{formatCurrency(stats?.totalWithdrawn)}</p>
+          <p className="text-xs text-gray-400 mt-1">Successfully paid out</p>
         </div>
       </div>
 
+      {/* How It Works */}
+      <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6">
+        <h3 className="font-semibold text-blue-900 mb-4">How Payments Work</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">1</div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">Brand Pays</p>
+              <p className="text-xs text-blue-700">Funds go to escrow</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">2</div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">You Create</p>
+              <p className="text-xs text-blue-700">Submit your content</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">3</div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">Brand Approves</p>
+              <p className="text-xs text-blue-700">Funds released to you</p>
+            </div>
+          </div>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">4</div>
+            <div>
+              <p className="text-sm font-medium text-blue-900">Withdraw</p>
+              <p className="text-xs text-blue-700">To your bank account</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Payouts */}
+      {payouts.length > 0 && (
+        <div className="bg-white rounded-2xl border border-gray-100">
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="font-semibold text-lg text-gray-900">Recent Payouts</h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {payouts.slice(0, 5).map((payout) => {
+              const statusBadge = getPayoutStatusBadge(payout.status);
+              return (
+                <div key={payout.id} className="p-4 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                      <ArrowUpRight className="w-5 h-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{formatCurrency(payout.amount)}</p>
+                      <p className="text-sm text-gray-500">{payout.bankName} - ****{payout.accountNumber?.slice(-4)}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium ${statusBadge.bg} ${statusBadge.text}`}>
+                      {statusBadge.label}
+                    </span>
+                    <p className="text-sm text-gray-500 mt-1">{formatDate(payout.createdAt)}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Transaction History */}
-      <div className="bg-white rounded-2xl shadow">
-        <div className="p-4 border-b border-gray-100">
-          <h2 className="font-semibold text-xl text-gray-900">Transaction History</h2>
+      <div className="bg-white rounded-2xl border border-gray-100">
+        <div className="p-5 border-b border-gray-100">
+          <h2 className="font-semibold text-lg text-gray-900">Transaction History</h2>
         </div>
         {transactions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            No transactions yet
+          <div className="p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-gray-400" />
+            </div>
+            <p className="text-gray-500 font-medium">No transactions yet</p>
+            <p className="text-sm text-gray-400 mt-1">Complete collaborations to start earning</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {transactions.map((tx) => (
-              <div key={tx.id} className="p-4 flex items-center justify-between">
+              <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
                 <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                     tx.type === 'earning' ? 'bg-green-100' :
-                    tx.type === 'payout' ? 'bg-blue-100' : 'bg-gray-100'
+                    tx.type === 'escrow_release' ? 'bg-blue-100' :
+                    tx.type === 'payout' ? 'bg-purple-100' : 'bg-gray-100'
                   }`}>
-                    {tx.type === 'earning' ? (
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
+                    {tx.type === 'earning' || tx.type === 'escrow_release' ? (
+                      <ArrowDownRight className={`w-5 h-5 ${tx.type === 'earning' ? 'text-green-600' : 'text-blue-600'}`} />
                     ) : (
-                      <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
+                      <ArrowUpRight className="w-5 h-5 text-purple-600" />
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900 capitalize">{tx.type}</p>
+                    <p className="font-medium text-gray-900 capitalize">
+                      {tx.type === 'escrow_release' ? 'Escrow Released' : tx.type}
+                    </p>
                     <p className="text-sm text-gray-500">{tx.description || tx.reference}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`font-semibold ${tx.type === 'earning' ? 'text-green-600' : 'text-gray-900'}`}>
-                    {tx.type === 'earning' ? '+' : '-'}₦{tx.amount?.toLocaleString()}
+                  <p className={`font-semibold ${
+                    tx.type === 'earning' || tx.type === 'escrow_release' ? 'text-green-600' : 'text-gray-900'
+                  }`}>
+                    {tx.type === 'earning' || tx.type === 'escrow_release' ? '+' : '-'}{formatCurrency(tx.amount)}
                   </p>
-                  <p className="text-sm text-gray-500">
-                    {new Date(tx.createdAt).toLocaleDateString()}
-                  </p>
+                  <p className="text-sm text-gray-500">{formatDate(tx.createdAt)}</p>
                 </div>
               </div>
             ))}
@@ -179,46 +326,52 @@ const Earnings = () => {
 
       {/* Payout Modal */}
       {showPayoutModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => { setShowPayoutModal(false); setError(''); }}
+          />
+          <div className="relative bg-white rounded-2xl max-w-md w-full shadow-2xl">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-              <h2 className="font-semibold text-2xl text-gray-900">Request Payout</h2>
-              <button onClick={() => setShowPayoutModal(false)} className="text-gray-500 hover:text-gray-700">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+              <h2 className="font-semibold text-xl text-gray-900">Withdraw Funds</h2>
+              <button
+                onClick={() => { setShowPayoutModal(false); setError(''); }}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
-            <form onSubmit={handleRequestPayout} className="p-6 space-y-4">
+            <form onSubmit={handleRequestPayout} className="p-6 space-y-5">
               {error && (
-                <div className="bg-red-50 text-red-500 px-4 py-3 rounded-lg text-sm">
+                <div className="bg-red-50 border border-red-100 text-red-600 px-4 py-3 rounded-xl text-sm flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   {error}
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Available Balance
-                </label>
-                <p className="text-2xl font-semibold text-green-600">
-                  ₦{(stats?.availableBalance || 0).toLocaleString()}
-                </p>
+              <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+                <p className="text-sm text-green-700 mb-1">Available Balance</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(stats?.availableBalance)}</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Amount to Withdraw (₦)
+                  Amount to Withdraw
                 </label>
-                <input
-                  type="number"
-                  value={payoutAmount}
-                  onChange={(e) => setPayoutAmount(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                  placeholder="Enter amount"
-                  min="5000"
-                  max={stats?.availableBalance || 0}
-                />
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">₦</span>
+                  <input
+                    type="number"
+                    value={payoutAmount}
+                    onChange={(e) => setPayoutAmount(e.target.value)}
+                    className="w-full pl-8 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter amount"
+                    min="5000"
+                    max={stats?.availableBalance || 0}
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Minimum: {formatCurrency(5000)}</p>
               </div>
 
               <div>
@@ -226,41 +379,59 @@ const Earnings = () => {
                   Bank Account
                 </label>
                 {bankAccounts.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    No bank account added. <a href="/creator/settings" className="text-green-600 hover:underline">Add one in settings</a>
-                  </p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-center">
+                    <Building2 className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No bank account added.</p>
+                    <Link
+                      to="/creator/settings"
+                      className="text-green-600 hover:text-green-700 text-sm font-medium"
+                    >
+                      Add one in settings →
+                    </Link>
+                  </div>
                 ) : (
                   <select
                     value={selectedAccount}
                     onChange={(e) => setSelectedAccount(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500"
                   >
                     <option value="">Select account...</option>
                     {bankAccounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.bankName} - {acc.accountNumber} ({acc.accountName})
+                        {acc.bankName} - ****{acc.accountNumber?.slice(-4)} ({acc.accountName})
                       </option>
                     ))}
                   </select>
                 )}
               </div>
 
-              <div className="pt-4 flex gap-3">
+              <div className="pt-2 flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowPayoutModal(false)}
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  onClick={() => { setShowPayoutModal(false); setError(''); }}
+                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={bankAccounts.length === 0}
-                  className="flex-1 bg-green-600 text-white px-4 py-3 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                  disabled={bankAccounts.length === 0 || payoutLoading}
+                  className="flex-1 bg-green-600 text-white px-4 py-3 rounded-xl font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
                 >
-                  Request Payout
+                  {payoutLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Withdraw
+                    </>
+                  )}
                 </button>
               </div>
+
+              <p className="text-xs text-gray-400 text-center">
+                Funds typically arrive within 1-3 business days
+              </p>
             </form>
           </div>
         </div>

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { authApi, paymentApi } from '../../api';
+import { authApi, creatorApi, paymentApi } from '../../api';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const Settings = () => {
-  const { user, refreshProfile, logout } = useAuth();
+  const { user, profile, refreshProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('account');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -11,8 +12,7 @@ const Settings = () => {
 
   // Account settings
   const [accountForm, setAccountForm] = useState({
-    firstName: '',
-    lastName: '',
+    displayName: '',
     email: '',
   });
 
@@ -26,22 +26,95 @@ const Settings = () => {
   // Bank accounts
   const [bankAccounts, setBankAccounts] = useState([]);
   const [showAddBank, setShowAddBank] = useState(false);
+  const [bankList, setBankList] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(false);
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
+  const [accountVerified, setAccountVerified] = useState(false);
+  const [verificationError, setVerificationError] = useState('');
   const [bankForm, setBankForm] = useState({
     bankCode: '',
+    bankName: '',
     accountNumber: '',
     accountName: '',
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && profile) {
       setAccountForm({
-        firstName: user.firstName || '',
-        lastName: user.lastName || '',
+        displayName: profile.displayName || '',
         email: user.email || '',
       });
     }
     loadBankAccounts();
-  }, [user]);
+    loadBankList();
+  }, [user, profile]);
+
+  const loadBankList = async () => {
+    setBanksLoading(true);
+    try {
+      const { data } = await paymentApi.getBankList();
+      setBankList(data.data || []);
+    } catch (err) {
+      console.error('Failed to load banks:', err);
+    } finally {
+      setBanksLoading(false);
+    }
+  };
+
+  // Verify bank account when account number is complete
+  const verifyBankAccount = useCallback(async (accountNumber, bankCode) => {
+    if (accountNumber.length !== 10 || !bankCode) return;
+
+    setVerifyingAccount(true);
+    setAccountVerified(false);
+    setVerificationError('');
+
+    try {
+      const { data } = await paymentApi.verifyBankAccount(accountNumber, bankCode);
+      if (data.success && data.data.accountName) {
+        setBankForm(prev => ({ ...prev, accountName: data.data.accountName }));
+        setAccountVerified(true);
+      } else {
+        setVerificationError('Could not verify account');
+      }
+    } catch (err) {
+      setVerificationError('Could not verify account. Please check the details.');
+    } finally {
+      setVerifyingAccount(false);
+    }
+  }, []);
+
+  // Handle bank selection
+  const handleBankChange = (e) => {
+    const bankCode = e.target.value;
+    const selectedBank = bankList.find(b => b.code === bankCode);
+    setBankForm(prev => ({
+      ...prev,
+      bankCode,
+      bankName: selectedBank?.name || '',
+      accountName: '',
+    }));
+    setAccountVerified(false);
+    setVerificationError('');
+
+    // Verify if account number is already filled
+    if (bankForm.accountNumber.length === 10) {
+      verifyBankAccount(bankForm.accountNumber, bankCode);
+    }
+  };
+
+  // Handle account number change
+  const handleAccountNumberChange = (e) => {
+    const accountNumber = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setBankForm(prev => ({ ...prev, accountNumber, accountName: '' }));
+    setAccountVerified(false);
+    setVerificationError('');
+
+    // Auto-verify when 10 digits entered
+    if (accountNumber.length === 10 && bankForm.bankCode) {
+      verifyBankAccount(accountNumber, bankForm.bankCode);
+    }
+  };
 
   const loadBankAccounts = async () => {
     try {
@@ -59,7 +132,7 @@ const Settings = () => {
     setSuccess('');
 
     try {
-      await authApi.updateProfile(accountForm);
+      await creatorApi.updateProfile({ displayName: accountForm.displayName });
       await refreshProfile();
       setSuccess('Account updated successfully!');
     } catch (err) {
@@ -168,25 +241,16 @@ const Settings = () => {
           {/* Account Tab */}
           {activeTab === 'account' && (
             <form onSubmit={handleAccountSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
-                  <input
-                    type="text"
-                    value={accountForm.firstName}
-                    onChange={(e) => setAccountForm({ ...accountForm, firstName: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
-                  <input
-                    type="text"
-                    value={accountForm.lastName}
-                    onChange={(e) => setAccountForm({ ...accountForm, lastName: e.target.value })}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Display Name</label>
+                <input
+                  type="text"
+                  value={accountForm.displayName}
+                  onChange={(e) => setAccountForm({ ...accountForm, displayName: e.target.value })}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                  placeholder="Your display name"
+                />
+                <p className="text-sm text-gray-500 mt-1">This is how you appear to brands</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
@@ -194,7 +258,7 @@ const Settings = () => {
                   type="email"
                   value={accountForm.email}
                   onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50"
                   disabled
                 />
                 <p className="text-sm text-gray-500 mt-1">Email cannot be changed</p>
@@ -256,13 +320,34 @@ const Settings = () => {
           {/* Bank Accounts Tab */}
           {activeTab === 'bank' && (
             <div className="space-y-4">
+              {bankAccounts.length === 0 && !showAddBank && (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No bank accounts added yet</p>
+                  <p className="text-sm mt-1">Add a bank account to receive payouts</p>
+                </div>
+              )}
+
               {bankAccounts.map((acc) => (
                 <div key={acc.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
-                  <div>
-                    <p className="font-medium text-gray-900">{acc.bankName}</p>
-                    <p className="text-sm text-gray-500">
-                      {acc.accountNumber} • {acc.accountName}
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-green-600 font-semibold text-sm">
+                        {acc.bankName?.substring(0, 2).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{acc.bankName}</p>
+                        {acc.isDefault && (
+                          <span className="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {acc.accountNumber} • {acc.accountName}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleDeleteBankAccount(acc.id)}
@@ -277,64 +362,98 @@ const Settings = () => {
                 <form onSubmit={handleAddBankAccount} className="border border-gray-200 rounded-lg p-4 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Bank</label>
-                    <select
-                      value={bankForm.bankCode}
-                      onChange={(e) => setBankForm({ ...bankForm, bankCode: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                      required
-                    >
-                      <option value="">Select bank...</option>
-                      <option value="044">Access Bank</option>
-                      <option value="050">Ecobank</option>
-                      <option value="070">Fidelity Bank</option>
-                      <option value="011">First Bank</option>
-                      <option value="214">FCMB</option>
-                      <option value="058">GTBank</option>
-                      <option value="082">Keystone Bank</option>
-                      <option value="076">Polaris Bank</option>
-                      <option value="221">Stanbic IBTC</option>
-                      <option value="232">Sterling Bank</option>
-                      <option value="032">Union Bank</option>
-                      <option value="033">UBA</option>
-                      <option value="035">Wema Bank</option>
-                      <option value="057">Zenith Bank</option>
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={bankForm.bankCode}
+                        onChange={handleBankChange}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg appearance-none"
+                        required
+                        disabled={banksLoading}
+                      >
+                        <option value="">
+                          {banksLoading ? 'Loading banks...' : 'Select bank...'}
+                        </option>
+                        {bankList.map((bank) => (
+                          <option key={bank.code} value={bank.code}>
+                            {bank.name}
+                          </option>
+                        ))}
+                      </select>
+                      {banksLoading && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 animate-spin" />
+                      )}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Number</label>
-                    <input
-                      type="text"
-                      value={bankForm.accountNumber}
-                      onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                      maxLength={10}
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={bankForm.accountNumber}
+                        onChange={handleAccountNumberChange}
+                        className={`w-full px-4 py-3 border rounded-lg pr-10 ${
+                          verificationError ? 'border-red-300' : accountVerified ? 'border-green-300' : 'border-gray-300'
+                        }`}
+                        placeholder="Enter 10-digit account number"
+                        maxLength={10}
+                        required
+                      />
+                      {verifyingAccount && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 animate-spin" />
+                      )}
+                      {accountVerified && !verifyingAccount && (
+                        <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
+                      )}
+                      {verificationError && !verifyingAccount && (
+                        <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-500" />
+                      )}
+                    </div>
+                    {verificationError && (
+                      <p className="text-sm text-red-500 mt-1">{verificationError}</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Account Name</label>
-                    <input
-                      type="text"
-                      value={bankForm.accountName}
-                      onChange={(e) => setBankForm({ ...bankForm, accountName: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={bankForm.accountName}
+                        className={`w-full px-4 py-3 border rounded-lg bg-gray-50 ${
+                          accountVerified ? 'border-green-300 text-gray-900' : 'border-gray-300 text-gray-500'
+                        }`}
+                        placeholder={verifyingAccount ? 'Verifying...' : 'Will be filled automatically'}
+                        readOnly
+                        required
+                      />
+                      {accountVerified && (
+                        <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-500" />
+                      )}
+                    </div>
+                    {!accountVerified && bankForm.bankCode && bankForm.accountNumber.length < 10 && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Enter 10 digits to auto-verify account
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowAddBank(false)}
-                      className="px-4 py-2 border border-gray-300 rounded-lg"
+                      onClick={() => {
+                        setShowAddBank(false);
+                        setBankForm({ bankCode: '', bankName: '', accountNumber: '', accountName: '' });
+                        setAccountVerified(false);
+                        setVerificationError('');
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      disabled={loading}
-                      className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50"
+                      disabled={loading || !accountVerified}
+                      className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Add Account
+                      {loading ? 'Adding...' : 'Add Account'}
                     </button>
                   </div>
                 </form>

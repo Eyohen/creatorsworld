@@ -38,6 +38,7 @@ import BrandDashboard from './pages/brand/Dashboard';
 import BrandDiscover from './pages/brand/Discover';
 import BrandSaved from './pages/brand/Saved';
 import BrandRequests from './pages/brand/Requests';
+import BrandRequestDetail from './pages/brand/RequestDetail';
 import BrandMessages from './pages/brand/Messages';
 import BrandSettings from './pages/brand/Settings';
 
@@ -201,6 +202,10 @@ function AppRoutes() {
         <Route
           path="/brand/requests"
           element={<ProtectedRoute allowedTypes={['brand']}><BrandRequests /></ProtectedRoute>}
+        />
+        <Route
+          path="/brand/requests/:id"
+          element={<ProtectedRoute allowedTypes={['brand']}><BrandRequestDetail /></ProtectedRoute>}
         />
         <Route
           path="/brand/messages"

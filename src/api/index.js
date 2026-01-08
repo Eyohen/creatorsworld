@@ -164,7 +164,7 @@ export const requestApi = {
   acceptRequest: (id) => api.put(`/requests/creator/${id}/accept`),
   declineRequest: (id, data) => api.put(`/requests/creator/${id}/decline`, data),
   sendCounterOffer: (id, data) => api.put(`/requests/creator/${id}/counter-offer`, data),
-  submitContent: (id, contentUrls) => api.put(`/requests/creator/${id}/submit-content`, { contentUrls }),
+  submitContent: (id, data) => api.put(`/requests/creator/${id}/submit-content`, data),
   // Shared
   getDetail: (id) => api.get(`/requests/${id}`),
   getTimeline: (id) => api.get(`/requests/${id}/timeline`),
@@ -184,6 +184,7 @@ export const contractApi = {
 export const paymentApi = {
   initialize: (requestId, amount) => api.post('/payments/initialize', { requestId, amount }),
   verify: (reference) => api.get(`/payments/verify/${reference}`),
+  getEscrowStatus: (requestId) => api.get(`/payments/escrow/${requestId}`),
   getEarnings: () => api.get('/payments/earnings'),
   getTransactions: () => api.get('/payments/transactions'),
   requestPayout: (data) => api.post('/payments/payout/request', data),

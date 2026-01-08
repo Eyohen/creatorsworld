@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { requestApi } from '../../api';
+import { requestApi, paymentApi } from '../../api';
 import {
   ArrowLeft, Building2, Calendar, DollarSign, Clock, CheckCircle2,
   XCircle, AlertCircle, FileText, Loader2, MessageSquare, Eye,
-  Send, ThumbsUp, ThumbsDown, User, Timer, AlertTriangle
+  Send, ThumbsUp, ThumbsDown, User, Timer, AlertTriangle,
+  Upload, Link as LinkIcon, Image, Video, X
 } from 'lucide-react';
+import { EscrowStatus } from '../../components/payment';
 
 // Countdown Timer Component
 const CountdownTimer = ({ expiresAt, large = false }) => {
@@ -122,6 +124,17 @@ const RequestDetail = () => {
   const [declineCategory, setDeclineCategory] = useState('');
   const [declineError, setDeclineError] = useState('');
 
+  // Escrow state
+  const [escrow, setEscrow] = useState(null);
+  const [escrowLoading, setEscrowLoading] = useState(false);
+
+  // Content submission state
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [contentLinks, setContentLinks] = useState([{ url: '', type: 'link', description: '' }]);
+  const [contentNotes, setContentNotes] = useState('');
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+
   useEffect(() => {
     loadRequest();
   }, [id]);
@@ -131,11 +144,31 @@ const RequestDetail = () => {
     try {
       const { data } = await requestApi.getCreatorRequestDetail(id);
       setRequest(data.data);
+
+      // Load escrow status if request is in a relevant state
+      const escrowStatuses = ['in_progress', 'content_submitted', 'revision_requested', 'content_approved', 'completed'];
+      if (escrowStatuses.includes(data.data.status)) {
+        loadEscrowStatus();
+      }
     } catch (err) {
       console.error('Failed to load request:', err);
       setError('Failed to load request details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadEscrowStatus = async () => {
+    setEscrowLoading(true);
+    try {
+      const { data } = await paymentApi.getEscrowStatus(id);
+      if (data.data) {
+        setEscrow(data.data);
+      }
+    } catch (err) {
+      console.error('Failed to load escrow status:', err);
+    } finally {
+      setEscrowLoading(false);
     }
   };
 
@@ -192,6 +225,50 @@ const RequestDetail = () => {
       setDeclineError(err.response?.data?.message || 'Failed to decline request');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Content submission functions
+  const handleAddContentLink = () => {
+    setContentLinks([...contentLinks, { url: '', type: 'link', description: '' }]);
+  };
+
+  const handleRemoveContentLink = (index) => {
+    if (contentLinks.length > 1) {
+      setContentLinks(contentLinks.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleContentLinkChange = (index, field, value) => {
+    const updated = [...contentLinks];
+    updated[index][field] = value;
+    setContentLinks(updated);
+  };
+
+  const handleSubmitContent = async () => {
+    // Validate at least one link
+    const validLinks = contentLinks.filter(l => l.url.trim());
+    if (validLinks.length === 0) {
+      setSubmitError('Please provide at least one content link');
+      return;
+    }
+
+    setSubmitError('');
+    setSubmitLoading(true);
+    try {
+      await requestApi.submitContent(id, {
+        contentLinks: validLinks,
+        notes: contentNotes.trim()
+      });
+      await loadRequest();
+      setShowSubmitModal(false);
+      setContentLinks([{ url: '', type: 'link', description: '' }]);
+      setContentNotes('');
+    } catch (err) {
+      console.error('Failed to submit content:', err);
+      setSubmitError(err.response?.data?.message || 'Failed to submit content');
+    } finally {
+      setSubmitLoading(false);
     }
   };
 
@@ -454,6 +531,123 @@ const RequestDetail = () => {
         </div>
       )}
 
+      {/* Escrow Status */}
+      {escrow && escrow.hasPayment && (
+        <EscrowStatus escrow={escrow} userType="creator" />
+      )}
+
+      {/* In Progress - Submit Content Section */}
+      {request?.status === 'in_progress' && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <h3 className="font-semibold text-gray-900 mb-2">Work in Progress</h3>
+          <p className="text-gray-600 mb-4">
+            The brand has paid into escrow. Create your content and submit it for review when ready.
+          </p>
+          <button
+            onClick={() => setShowSubmitModal(true)}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+          >
+            <Upload className="w-5 h-5" />
+            Submit Content for Review
+          </button>
+        </div>
+      )}
+
+      {/* Content Submitted - Waiting for Approval */}
+      {request?.status === 'content_submitted' && (
+        <div className="bg-purple-50 border border-purple-100 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <FileText className="w-6 h-6 text-purple-600 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-purple-900">Content Submitted</h3>
+              <p className="text-purple-700 mt-1">
+                Your content has been submitted and is waiting for the brand's review. You'll be notified once they approve it or request revisions.
+              </p>
+              {request.submittedContent && (
+                <div className="mt-4 p-4 bg-white rounded-xl border border-purple-200">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Submitted Content:</p>
+                  {request.submittedContent.contentLinks?.map((link, idx) => (
+                    <div key={idx} className="flex items-center gap-2 mb-2">
+                      <LinkIcon className="w-4 h-4 text-gray-400" />
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm truncate">
+                        {link.description || link.url}
+                      </a>
+                    </div>
+                  ))}
+                  {request.submittedContent.notes && (
+                    <p className="text-sm text-gray-600 mt-2 pt-2 border-t border-gray-100">
+                      {request.submittedContent.notes}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Revision Requested */}
+      {request?.status === 'revision_requested' && (
+        <div className="bg-orange-50 border border-orange-100 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <AlertCircle className="w-6 h-6 text-orange-600 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-orange-900">Revision Requested</h3>
+              <p className="text-orange-700 mt-1">
+                The brand has requested revisions to your content.
+              </p>
+              {request.revisionFeedback && (
+                <div className="mt-4 p-4 bg-white rounded-xl border border-orange-200">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Brand's Feedback:</p>
+                  <p className="text-gray-600">{request.revisionFeedback}</p>
+                </div>
+              )}
+              <button
+                onClick={() => setShowSubmitModal(true)}
+                className="mt-4 inline-flex items-center gap-2 px-6 py-3 bg-orange-600 text-white rounded-xl font-semibold hover:bg-orange-700 transition-colors"
+              >
+                <Upload className="w-5 h-5" />
+                Submit Revised Content
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Approved / Completed */}
+      {(request?.status === 'content_approved' || request?.status === 'completed') && (
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0" />
+            <div>
+              <h3 className="font-semibold text-green-900">
+                {request?.status === 'completed' ? 'Collaboration Completed' : 'Content Approved'}
+              </h3>
+              <p className="text-green-700 mt-1">
+                {request?.status === 'completed'
+                  ? 'This collaboration has been completed successfully. The payment has been released to your available balance.'
+                  : 'Your content has been approved! The payment will be released to your available balance.'}
+              </p>
+              {escrow && escrow.status === 'released' && (
+                <div className="mt-4 p-4 bg-white rounded-xl border border-green-200">
+                  <p className="text-sm text-gray-600">
+                    <span className="font-semibold text-green-600">
+                      ₦{escrow.creatorPayout?.toLocaleString()}
+                    </span> has been added to your available balance.
+                  </p>
+                  <Link
+                    to="/creator/earnings"
+                    className="mt-2 inline-flex items-center gap-2 text-green-600 hover:text-green-700 text-sm font-medium"
+                  >
+                    View Earnings →
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Messages */}
       {request?.status === 'accepted' && (
         <div className="bg-green-50 border border-green-100 rounded-2xl p-6">
@@ -462,7 +656,7 @@ const RequestDetail = () => {
             <div>
               <h3 className="font-semibold text-green-900">Request Accepted</h3>
               <p className="text-green-700 mt-1">
-                You've accepted this collaboration request. The brand will be notified and a contract will be generated for signing.
+                You've accepted this collaboration request. Waiting for the brand to pay into escrow before you can start work.
               </p>
             </div>
           </div>
@@ -615,6 +809,123 @@ const RequestDetail = () => {
                   <>
                     <XCircle className="w-5 h-5" />
                     Decline Request
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content Submission Modal */}
+      {showSubmitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => { setShowSubmitModal(false); setSubmitError(''); }}
+          />
+          <div className="relative bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-900 mb-2">Submit Content</h3>
+            <p className="text-gray-600 mb-6">
+              Add links to your completed content for the brand to review.
+            </p>
+
+            {submitError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {submitError}
+              </div>
+            )}
+
+            {/* Content Links */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content Links <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-3">
+                {contentLinks.map((link, index) => (
+                  <div key={index} className="flex gap-2">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex gap-2">
+                        <select
+                          value={link.type}
+                          onChange={(e) => handleContentLinkChange(index, 'type', e.target.value)}
+                          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="link">Link</option>
+                          <option value="video">Video</option>
+                          <option value="image">Image</option>
+                          <option value="document">Document</option>
+                        </select>
+                        <input
+                          type="url"
+                          value={link.url}
+                          onChange={(e) => handleContentLinkChange(index, 'url', e.target.value)}
+                          placeholder="https://..."
+                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={link.description}
+                        onChange={(e) => handleContentLinkChange(index, 'description', e.target.value)}
+                        placeholder="Description (optional)"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    {contentLinks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveContentLink(index)}
+                        className="p-2 text-gray-400 hover:text-red-500 transition-colors self-start mt-1"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={handleAddContentLink}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+              >
+                + Add another link
+              </button>
+            </div>
+
+            {/* Notes */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Additional Notes
+              </label>
+              <textarea
+                value={contentNotes}
+                onChange={(e) => setContentNotes(e.target.value)}
+                placeholder="Any additional information for the brand..."
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowSubmitModal(false); setSubmitError(''); }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitContent}
+                disabled={submitLoading}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+              >
+                {submitLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Send className="w-5 h-5" />
+                    Submit Content
                   </>
                 )}
               </button>
