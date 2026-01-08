@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authApi } from '../../api';
 
@@ -7,9 +7,17 @@ const VerifyEmailPage = () => {
   const token = searchParams.get('token');
   const [status, setStatus] = useState('verifying'); // verifying, success, error
   const [error, setError] = useState('');
+  const hasVerified = useRef(false); // Prevent double API calls
 
   useEffect(() => {
+    // Prevent double execution (React StrictMode calls useEffect twice)
+    if (hasVerified.current) {
+      console.log('Already attempted verification, skipping...');
+      return;
+    }
+
     if (token) {
+      hasVerified.current = true;
       verifyEmail();
     } else {
       setStatus('error');
@@ -19,9 +27,12 @@ const VerifyEmailPage = () => {
 
   const verifyEmail = async () => {
     try {
-      await authApi.verifyEmail(token);
+      console.log('Calling verify API with token:', token);
+      const response = await authApi.verifyEmail(token);
+      console.log('Verify API response:', response.data);
       setStatus('success');
     } catch (err) {
+      console.error('Verify API error:', err.response?.data || err.message);
       setStatus('error');
       setError(err.response?.data?.message || 'Verification failed');
     }
