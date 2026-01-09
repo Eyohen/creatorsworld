@@ -11,6 +11,21 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Token refresh state management
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+  failedQueue = [];
+};
+
 // Request interceptor - add auth token
 api.interceptors.request.use(
   (config) => {
@@ -23,31 +38,83 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Response interceptor - handle token refresh
+// Response interceptor - handle token refresh with queue
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // If token expired and not already retrying
-    if (error.response?.status === 401 &&
-        error.response?.data?.code === 'TOKEN_EXPIRED' &&
-        !originalRequest._retry) {
+    // Check if it's an auth error that might need token refresh
+    const isAuthError = error.response?.status === 401;
+    const isTokenExpired =
+      error.response?.data?.code === 'TOKEN_EXPIRED' ||
+      error.response?.data?.message?.toLowerCase().includes('token expired') ||
+      error.response?.data?.message?.toLowerCase().includes('invalid token');
+
+    // Don't retry if it's a login/register request or already retried
+    const isAuthRoute = originalRequest.url?.includes('/auth/login') ||
+                        originalRequest.url?.includes('/auth/register') ||
+                        originalRequest.url?.includes('/auth/refresh-token');
+
+    if (isAuthError && !isAuthRoute && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh-token`, {}, {
-          withCredentials: true
-        });
+        const { data } = await axios.post(
+          `${API_URL}/auth/refresh-token`,
+          {},
+          { withCredentials: true }
+        );
 
-        localStorage.setItem('accessToken', data.data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.data.accessToken}`;
+        const newToken = data.data.accessToken;
+        localStorage.setItem('accessToken', newToken);
+
+        // Update the authorization header
+        api.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+        originalRequest.headers.Authorization = `Bearer ${newToken}`;
+
+        processQueue(null, newToken);
+
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh failed - logout user
+        processQueue(refreshError, null);
+
+        // Clear auth state
         localStorage.removeItem('accessToken');
-        window.location.href = '/login';
+
+        // Only redirect if we're not already on auth pages
+        const currentPath = window.location.pathname;
+        const isPublicPage =
+          currentPath === '/' ||
+          currentPath === '/login' ||
+          currentPath === '/register' ||
+          currentPath === '/forgot-password' ||
+          currentPath === '/reset-password' ||
+          currentPath.startsWith('/verify-email') ||
+          currentPath.startsWith('/creators/');
+
+        if (!isPublicPage) {
+          // Dispatch a custom event so AuthContext can handle it
+          window.dispatchEvent(new CustomEvent('auth:logout'));
+          window.location.href = '/login?session=expired';
+        }
+
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 
@@ -61,6 +128,7 @@ export const authApi = {
   login: (data) => api.post('/auth/login', data),
   logout: () => api.post('/auth/logout'),
   me: () => api.get('/auth/me'),
+  refreshToken: () => api.post('/auth/refresh-token'),
   forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
   resetPassword: (data) => api.post('/auth/reset-password', data),
   verifyEmail: (token) => api.get(`/auth/verify-email?token=${token}`),
@@ -199,12 +267,46 @@ export const paymentApi = {
 
 // Message endpoints
 export const messageApi = {
+  // Contacts (active collaborations)
+  getContacts: () => api.get('/messages/contacts'),
+
+  // Conversations
   getConversations: () => api.get('/messages/conversations'),
   getConversation: (id) => api.get(`/messages/conversations/${id}`),
-  getMessages: (conversationId, params) => api.get(`/messages/conversations/${conversationId}/messages`, { params }),
-  sendMessage: (conversationId, content) => api.post(`/messages/conversations/${conversationId}/messages`, { content }),
-  markAsRead: (conversationId) => api.put(`/messages/conversations/${conversationId}/read`),
+  createOrGetConversation: (brandId, creatorId, requestId) =>
+    api.post('/messages/conversations', { brandId, creatorId, requestId }),
   getByRequest: (requestId) => api.get(`/messages/request/${requestId}`),
+
+  // Messages
+  getMessages: (conversationId, params) =>
+    api.get(`/messages/conversations/${conversationId}/messages`, { params }),
+  sendMessage: (conversationId, content, messageType = 'text', attachments = null) =>
+    api.post(`/messages/conversations/${conversationId}/messages`, { content, messageType, attachments }),
+  editMessage: (conversationId, messageId, content) =>
+    api.patch(`/messages/conversations/${conversationId}/messages/${messageId}`, { content }),
+  deleteMessage: (conversationId, messageId) =>
+    api.delete(`/messages/conversations/${conversationId}/messages/${messageId}`),
+  markAsRead: (conversationId) => api.put(`/messages/conversations/${conversationId}/read`),
+
+  // Reactions
+  addReaction: (conversationId, messageId, emoji) =>
+    api.post(`/messages/conversations/${conversationId}/messages/${messageId}/reactions`, { emoji }),
+  removeReaction: (conversationId, messageId, emoji) =>
+    api.delete(`/messages/conversations/${conversationId}/messages/${messageId}/reactions`, { data: { emoji } }),
+
+  // Typing & Presence
+  sendTyping: (conversationId) => api.post(`/messages/conversations/${conversationId}/typing`),
+  getPresence: (userId) => api.get(`/messages/users/${userId}/presence`),
+  getBulkPresence: (userIds) => api.post('/messages/users/presence/bulk', { userIds }),
+
+  // Attachments
+  uploadAttachment: (conversationId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/messages/conversations/${conversationId}/attachments`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+  },
 };
 
 // Notification endpoints

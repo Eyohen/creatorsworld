@@ -6,42 +6,57 @@ import {
   FileCheck, Zap, Target, Plus, Minus, Quote, ChevronLeft,
   ChevronRight, X, Instagram, Phone
 } from 'lucide-react';
+import { creatorApi } from '../../api';
+
+// Helper to get creator image
+const getCreatorImage = (creator) => {
+  return creator.profileImage || creator.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(creator.displayName || creator.name || 'Creator')}&background=random&size=400`;
+};
 
 // ============== CREATOR PROFILE MODAL ==============
 const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('Portfolio');
+  const [fullCreator, setFullCreator] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch full creator profile when modal opens
+  useEffect(() => {
+    if (isOpen && creator?.id) {
+      setLoading(true);
+      creatorApi.getById(creator.id)
+        .then(({ data }) => {
+          setFullCreator(data.data);
+        })
+        .catch((err) => {
+          console.error('Failed to load creator profile:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setFullCreator(null);
+    }
+  }, [isOpen, creator?.id]);
 
   if (!isOpen || !creator) return null;
 
-  const portfolio = creator.portfolio || [
-    {
-      id: 1,
-      image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400&h=500&fit=crop',
-      title: 'Brand Campaign',
-      client: 'Itel Nigeria'
-    },
-    {
-      id: 2,
-      image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&h=500&fit=crop',
-      title: 'Product Review',
-      client: 'Netflix Africa'
-    },
-    {
-      id: 3,
-      image: 'https://images.unsplash.com/photo-1604537466158-719b1972feb8?w=400&h=500&fit=crop',
-      title: 'Video Content',
-      client: 'Lifestyle.co'
-    }
-  ];
+  // Use full creator data if available
+  const displayCreator = fullCreator || creator;
+  const portfolio = displayCreator.portfolio || [];
 
   const stats = [
-    { value: creator.followersCount || '78K', label: 'Followers' },
-    { value: creator.engagement || '13.2%', label: 'Engagement' },
-    { value: creator.campaigns || '156', label: 'Campaigns' },
-    { value: creator.completion || '98', label: 'Completion' },
+    { value: displayCreator.followersCount || '0', label: 'Followers' },
+    { value: displayCreator.engagement || '0%', label: 'Engagement' },
+    { value: displayCreator.completedCollaborations || displayCreator.campaigns || '0', label: 'Campaigns' },
+    { value: displayCreator.completionRate || displayCreator.completion || '0', label: 'Completion' },
   ];
 
-  const reviews = creator.reviewCount || 127;
+  const reviews = displayCreator.totalReviews || displayCreator.reviewCount || 0;
+  const displayCategories = displayCreator.categories?.map(c => typeof c === 'string' ? c : c.name) || displayCreator.categoryNames || [displayCreator.tier ? `${displayCreator.tier} Creator` : 'Creator'];
+  const displayName = displayCreator.displayName || displayCreator.name || 'Creator';
+  const displayLocation = displayCreator.state?.name ? `${displayCreator.city?.name || ''}, ${displayCreator.state?.name}`.replace(/^, /, '') : displayCreator.location || 'Nigeria';
+  const displayImage = displayCreator.profileImage || displayCreator.image || getCreatorImage(displayCreator);
+  const displayAbout = displayCreator.bio || displayCreator.about || `Professional creator helping brands connect with engaged Nigerian audiences.`;
 
   return (
     <>
@@ -57,10 +72,17 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
           className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
+          {/* Loading Overlay */}
+          {loading && (
+            <div className="absolute inset-0 bg-white/80 z-10 flex items-center justify-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+            </div>
+          )}
+
           {/* Cover Image */}
           <div className="relative h-48 overflow-hidden">
             <img
-              src={creator.coverImage || creator.image}
+              src={displayImage}
               alt="Cover"
               className="w-full h-full object-cover"
             />
@@ -81,8 +103,8 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
             <div className="flex items-start gap-4 -mt-12 mb-4">
               <div className="relative flex-shrink-0">
                 <img
-                  src={creator.image}
-                  alt={creator.name}
+                  src={displayImage}
+                  alt={displayName}
                   className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-lg"
                 />
               </div>
@@ -91,18 +113,18 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
                 <div className="flex items-start justify-between flex-wrap gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-bold text-gray-900">{creator.name}</h2>
-                      {creator.verified && (
+                      <h2 className="text-xl font-bold text-gray-900">{displayName}</h2>
+                      {displayCreator.verified && (
                         <Verified size={18} className="text-blue-600 fill-blue-100" />
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-sm text-gray-500 mt-0.5">
                       <MapPin size={14} />
-                      <span>{creator.location}</span>
+                      <span>{displayLocation}</span>
                     </div>
                     {/* Tags */}
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      {creator.categories.map((tag, index) => (
+                      {displayCategories.map((tag, index) => (
                         <span
                           key={index}
                           className="px-2.5 py-1 bg-gray-100 text-gray-600 text-xs rounded-full"
@@ -147,7 +169,7 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
             <div className="mb-6">
               <h3 className="font-semibold text-gray-900 mb-2">About</h3>
               <p className="text-sm text-gray-600 leading-relaxed">
-                {creator.about || `With ${creator.followersCount || '78K'} loyal followers and an impressive ${creator.engagement || '13.2%'} engagement rate, I create content that resonates. My audience trusts my recommendations, making me the perfect partner for brands looking to make an impact in the Nigerian market. Professional creator helping brands connect with engaged Nigerian audiences. Specializing in authentic storytelling and high-quality content that drives real results.`}
+                {displayAbout}
               </p>
             </div>
 
@@ -191,23 +213,27 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
             {/* Portfolio Grid */}
             {activeTab === 'Portfolio' && (
               <div className="grid grid-cols-3 gap-3">
-                {portfolio.map((item) => (
+                {portfolio.length > 0 ? portfolio.map((item) => (
                   <div
                     key={item.id}
                     className="relative rounded-xl overflow-hidden aspect-[3/4] group cursor-pointer"
                   >
                     <img
-                      src={item.image}
+                      src={item.mediaUrl || item.image}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
                     <div className="absolute bottom-3 left-3 right-3 text-white">
                       <p className="font-semibold text-sm">{item.title}</p>
-                      <p className="text-xs text-gray-300">{item.client}</p>
+                      <p className="text-xs text-gray-300">{item.brandName || item.client}</p>
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <div className="col-span-3 text-center py-8 text-gray-500">
+                    No portfolio items yet
+                  </div>
+                )}
               </div>
             )}
 
@@ -397,171 +423,56 @@ const CuratedCreators = () => {
   const [activeCategory, setActiveCategory] = useState('All Creators');
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [creators, setCreators] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const categories = ['All Creators', 'Tech', 'Explore', 'Trending Experts', 'Fashion', 'Travel', 'Business', 'Entertainment'];
 
-  const creators = [
-    {
-      id: 1,
-      name: 'Chinelo Odum',
-      image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&h=300&fit=crop',
-      categories: ['Fashion', 'Lifestyle', 'Beauty'],
-      location: 'Lagos, Nigeria',
-      followers: '100K - 500K',
-      rate: '₦75K - ₦150K',
-      verified: true,
-      featured: true,
-      followersCount: '125K',
-      engagement: '12.5%',
-      campaigns: '89',
-      completion: '97',
-      reviewCount: 156,
-      about: 'Fashion and lifestyle creator passionate about showcasing African beauty and style. I help brands connect with my engaged audience through authentic content that resonates.',
-      portfolio: [
-        { id: 1, image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400&h=500&fit=crop', title: 'Fashion Campaign', client: 'Zara Nigeria' },
-        { id: 2, image: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=400&h=500&fit=crop', title: 'Style Guide', client: 'H&M Africa' },
-        { id: 3, image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=500&fit=crop', title: 'Beauty Review', client: 'MAC Cosmetics' },
-      ]
-    },
-    {
-      id: 2,
-      name: 'Lydia Ebikake',
-      image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&h=300&fit=crop',
-      categories: ['Nigerian Cuisine', 'Recipes', 'Food'],
-      location: 'Lagos, Nigeria',
-      followers: '50K - 100K',
-      rate: '₦50K - ₦100K',
-      verified: true,
-      featured: false,
-      followersCount: '78K',
-      engagement: '13.2%',
-      campaigns: '156',
-      completion: '98',
-      reviewCount: 127,
-      about: 'With 78K loyal followers and an impressive 13.2% engagement rate, I create content that resonates. My audience trusts my recommendations, making me the perfect partner for brands looking to make an impact in the Nigerian market.',
-    },
-    {
-      id: 3,
-      name: 'Sarah Arzude',
-      image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&h=300&fit=crop',
-      categories: ['Tech Reviews', 'Gadgets'],
-      location: 'Ibadan',
-      followers: '50K - 100K',
-      rate: '₦40K - ₦80K',
-      verified: true,
-      featured: false,
-      followersCount: '65K',
-      engagement: '9.8%',
-      campaigns: '78',
-      completion: '95',
-      reviewCount: 89,
-    },
-    {
-      id: 4,
-      name: 'Daniel Olabode',
-      image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&h=300&fit=crop',
-      categories: ['Lifestyle'],
-      location: 'Lagos, Nigeria',
-      followers: '100K - 500K',
-      rate: '₦150K - ₦300K',
-      verified: true,
-      featured: false,
-      followersCount: '220K',
-      engagement: '8.5%',
-      campaigns: '134',
-      completion: '99',
-      reviewCount: 201,
-    },
-    {
-      id: 5,
-      name: 'Hannah Musa',
-      image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1493770348161-369560ae357d?w=800&h=300&fit=crop',
-      categories: ['Nigerian Cuisine', 'Recipes', 'Food'],
-      location: 'Lagos, Nigeria',
-      followers: '50K - 100K',
-      rate: '₦150K - ₦300K',
-      verified: true,
-      featured: true,
-      followersCount: '92K',
-      engagement: '15.1%',
-      campaigns: '167',
-      completion: '98',
-      reviewCount: 143,
-    },
-    {
-      id: 6,
-      name: 'Martha Ojo',
-      image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=300&fit=crop',
-      categories: ['Tech Reviews', 'Gadgets', 'AI'],
-      location: 'Ogun, Nigeria',
-      followers: '100K - 500K',
-      rate: '₦150K - ₦300K',
-      verified: true,
-      featured: false,
-      followersCount: '185K',
-      engagement: '11.2%',
-      campaigns: '112',
-      completion: '96',
-      reviewCount: 178,
-    },
-    {
-      id: 7,
-      name: 'Daniel Nwankwo',
-      image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&h=300&fit=crop',
-      categories: ['Videography', 'Editing', 'Tech'],
-      location: 'Lagos, Nigeria',
-      followers: '10K - 50K',
-      rate: '₦150K - ₦300K',
-      verified: false,
-      featured: false,
-      followersCount: '34K',
-      engagement: '18.5%',
-      campaigns: '45',
-      completion: '94',
-      reviewCount: 52,
-    },
-    {
-      id: 8,
-      name: 'Philip Usman',
-      image: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=800&h=300&fit=crop',
-      categories: ['Tech Reviews', 'Gadgets', 'AI'],
-      location: 'Lagos, Nigeria',
-      followers: '50K - 100K',
-      rate: '₦150K - ₦300K',
-      verified: true,
-      featured: true,
-      followersCount: '88K',
-      engagement: '10.8%',
-      campaigns: '98',
-      completion: '97',
-      reviewCount: 124,
-    },
-    {
-      id: 9,
-      name: 'Simon Ogunleye',
-      image: 'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=400&h=400&fit=crop',
-      coverImage: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=800&h=300&fit=crop',
-      categories: ['Tech Reviews', 'Gadgets', 'AI'],
-      location: 'Oyo, Nigeria',
-      followers: '50K - 100K',
-      rate: '₦150K - ₦300K',
-      verified: true,
-      featured: false,
-      followersCount: '71K',
-      engagement: '12.3%',
-      campaigns: '67',
-      completion: '95',
-      reviewCount: 89,
-    },
-  ];
+  // Fetch creators from API on mount
+  useEffect(() => {
+    const fetchCreators = async () => {
+      try {
+        setLoading(true);
+        const { data } = await creatorApi.search({ limit: 9 });
+        // API returns { data: { creators: [...], pagination: {...} } }
+        setCreators(data.data?.creators || []);
+      } catch (err) {
+        console.error('Failed to load creators:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCreators();
+  }, []);
+
+  // Helper to format price range from rate cards
+  const getPriceRange = (creator) => {
+    if (!creator.rateCards || creator.rateCards.length === 0) {
+      return 'Contact for rates';
+    }
+    const prices = creator.rateCards.map(rc => rc.basePrice).filter(Boolean);
+    if (prices.length === 0) return 'Contact for rates';
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    if (min === max) return `₦${min.toLocaleString()}`;
+    return `₦${min.toLocaleString()} - ₦${max.toLocaleString()}`;
+  };
+
+  // Helper to get location string
+  const getLocation = (creator) => {
+    if (creator.state?.name) {
+      return creator.city?.name ? `${creator.city.name}, ${creator.state.name}` : creator.state.name;
+    }
+    return 'Nigeria';
+  };
+
+  // Helper to get categories array
+  const getCategories = (creator) => {
+    if (creator.categories && creator.categories.length > 0) {
+      return creator.categories.map(c => typeof c === 'string' ? c : c.name);
+    }
+    return [creator.tier ? `${creator.tier} Creator` : 'Creator'];
+  };
 
   const openModal = (creator) => {
     setSelectedCreator(creator);
@@ -603,52 +514,66 @@ const CuratedCreators = () => {
           ))}
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {creators.map((creator) => (
-            <div key={creator.id} className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl transition-all duration-300">
-              <div className="relative h-64 overflow-hidden">
-                <img src={creator.image} alt={creator.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                {creator.featured && (
-                  <div className="absolute top-3 left-3 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full flex items-center gap-1">
-                    <Star size={12} className="fill-current" /> Featured
-                  </div>
-                )}
-                <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors">
-                  <Heart size={16} className="text-gray-600 hover:text-red-500" />
-                </button>
-              </div>
-
-              <div className="p-5">
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {creator.categories.map((cat, index) => (
-                    <span key={index} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">{cat}</span>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
-                  <span className="flex items-center gap-1"><MapPin size={12} />{creator.location}</span>
-                  <span className="flex items-center gap-1"><Users size={12} />{creator.followers}</span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 flex items-center gap-1.5">
-                      {creator.name}
-                      {creator.verified && <Verified size={14} className="text-blue-600 fill-blue-100" />}
-                    </h3>
-                    <p className="text-sm text-gray-500">{creator.rate}</p>
-                  </div>
-                  <button
-                    onClick={() => openModal(creator)}
-                    className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-full hover:bg-blue-600 hover:text-white transition-colors"
-                  >
-                    View Profile
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        ) : creators.length === 0 ? (
+          <div className="text-center py-20 text-gray-500">
+            <p>No creators found. Check back soon!</p>
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {creators.map((creator) => (
+              <div key={creator.id} className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:border-gray-200 hover:shadow-xl transition-all duration-300">
+                <div className="relative h-64 overflow-hidden">
+                  <img
+                    src={getCreatorImage(creator)}
+                    alt={creator.displayName || 'Creator'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  {creator.featured && (
+                    <div className="absolute top-3 left-3 px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-full flex items-center gap-1">
+                      <Star size={12} className="fill-current" /> Featured
+                    </div>
+                  )}
+                  <button className="absolute top-3 right-3 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors">
+                    <Heart size={16} className="text-gray-600 hover:text-red-500" />
                   </button>
                 </div>
+
+                <div className="p-5">
+                  <div className="flex flex-wrap gap-1 mb-3">
+                    {getCategories(creator).slice(0, 3).map((cat, index) => (
+                      <span key={index} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">{cat}</span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
+                    <span className="flex items-center gap-1"><MapPin size={12} />{getLocation(creator)}</span>
+                    <span className="flex items-center gap-1"><Users size={12} />{creator.followersCount || '0'}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-1.5">
+                        {creator.displayName || 'Creator'}
+                        {creator.verified && <Verified size={14} className="text-blue-600 fill-blue-100" />}
+                      </h3>
+                      <p className="text-sm text-gray-500">{getPriceRange(creator)}</p>
+                    </div>
+                    <button
+                      onClick={() => openModal(creator)}
+                      className="px-4 py-2 text-sm font-medium text-blue-600 border border-blue-600 rounded-full hover:bg-blue-600 hover:text-white transition-colors"
+                    >
+                      View Profile
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="text-center mt-10">
           <Link

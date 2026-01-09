@@ -15,7 +15,7 @@ const Portfolio = () => {
     mediaUrl: '',
     mediaType: 'image',
     platform: '',
-    campaignBrand: '',
+    brandName: '',
   });
 
   useEffect(() => {
@@ -24,7 +24,7 @@ const Portfolio = () => {
 
   const loadPortfolio = async () => {
     try {
-      const { data } = await creatorApi.getPortfolio();
+      const { data } = await creatorApi.getMyPortfolio();
       setItems(data.data || []);
     } catch (err) {
       console.error('Failed to load portfolio:', err);
@@ -84,7 +84,7 @@ const Portfolio = () => {
       mediaUrl: '',
       mediaType: 'image',
       platform: '',
-      campaignBrand: '',
+      brandName: '',
     });
     setShowModal(true);
   };
@@ -97,7 +97,7 @@ const Portfolio = () => {
       mediaUrl: item.mediaUrl || '',
       mediaType: item.mediaType || 'image',
       platform: item.platform || '',
-      campaignBrand: item.campaignBrand || '',
+      brandName: item.brandName || '',
     });
     setShowModal(true);
   };
@@ -281,8 +281,8 @@ const Portfolio = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Brand (if any)</label>
                   <input
                     type="text"
-                    value={form.campaignBrand}
-                    onChange={(e) => setForm({ ...form, campaignBrand: e.target.value })}
+                    value={form.brandName}
+                    onChange={(e) => setForm({ ...form, brandName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                     placeholder="Brand you worked with"
                   />

@@ -39,7 +39,7 @@ const RateCards = () => {
 
   const loadRateCards = async () => {
     try {
-      const { data } = await creatorApi.getRateCards();
+      const { data } = await creatorApi.getMyRateCards();
       setRateCards(data.data || []);
     } catch (err) {
       console.error('Failed to load rate cards:', err);
@@ -55,15 +55,16 @@ const RateCards = () => {
     const submitData = {
       platform: form.platform,
       contentType: form.contentType,
-      deliveryDays: form.deliveryDays ? parseInt(form.deliveryDays) : null,
+      deliveryDays: form.deliveryDays ? parseInt(form.deliveryDays) : 7,
       description: form.description,
+      priceType: form.pricingType === 'fixed' ? 'fixed' : 'range',
     };
 
     if (form.pricingType === 'fixed') {
-      submitData.price = parseFloat(form.price);
+      submitData.basePrice = parseFloat(form.price);
     } else {
-      submitData.priceMin = parseFloat(form.priceMin);
-      submitData.priceMax = parseFloat(form.priceMax);
+      submitData.basePrice = parseFloat(form.priceMin);
+      submitData.maxPrice = parseFloat(form.priceMax);
     }
 
     try {
@@ -110,10 +111,10 @@ const RateCards = () => {
     setForm({
       platform: card.platform,
       contentType: card.contentType,
-      pricingType: card.price ? 'fixed' : 'range',
-      price: card.price || '',
-      priceMin: card.priceMin || '',
-      priceMax: card.priceMax || '',
+      pricingType: card.priceType === 'fixed' ? 'fixed' : 'range',
+      price: card.basePrice || '',
+      priceMin: card.basePrice || '',
+      priceMax: card.maxPrice || '',
       deliveryDays: card.deliveryDays || '',
       description: card.description || '',
     });
@@ -198,10 +199,10 @@ const RateCards = () => {
                 </div>
               </div>
               <div className="text-2xl font-semibold text-green-600">
-                {card.price ? (
-                  `₦${card.price.toLocaleString()}`
+                {card.priceType === 'fixed' ? (
+                  `₦${Number(card.basePrice).toLocaleString()}`
                 ) : (
-                  `₦${card.priceMin?.toLocaleString()} - ₦${card.priceMax?.toLocaleString()}`
+                  `₦${Number(card.basePrice).toLocaleString()} - ₦${Number(card.maxPrice).toLocaleString()}`
                 )}
               </div>
               {card.description && (

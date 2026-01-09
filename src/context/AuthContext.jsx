@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { authApi } from '../api';
 
 const AuthContext = createContext(null);
@@ -11,16 +11,89 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }) => {
+// Parse JWT to get expiry time
+const parseJwt = (token) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+};
+
+// Get time until token expires (in ms)
+const getTokenTimeToExpiry = (token) => {
+  const payload = parseJwt(token);
+  if (!payload || !payload.exp) return 0;
+  return payload.exp * 1000 - Date.now();
+};
+
+export const 
+AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const refreshTimeoutRef = useRef(null);
+
+  // Schedule token refresh before expiry
+  const scheduleTokenRefresh = useCallback((token) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    const timeToExpiry = getTokenTimeToExpiry(token);
+    // Refresh 5 minutes before expiry, or immediately if less than 5 min left
+    const refreshTime = Math.max(timeToExpiry - 5 * 60 * 1000, 0);
+
+    if (refreshTime > 0) {
+      refreshTimeoutRef.current = setTimeout(async () => {
+        try {
+          const { data } = await authApi.refreshToken();
+          const newToken = data.data.accessToken;
+          localStorage.setItem('accessToken', newToken);
+          scheduleTokenRefresh(newToken);
+        } catch (err) {
+          console.error('Proactive token refresh failed:', err);
+          // Don't logout here - let the interceptor handle it on next request
+        }
+      }, refreshTime);
+    }
+  }, []);
+
+  // Clear scheduled refresh
+  const clearScheduledRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Handle logout event from API interceptor
+  useEffect(() => {
+    const handleLogout = () => {
+      clearScheduledRefresh();
+      setUser(null);
+      setProfile(null);
+    };
+
+    window.addEventListener('auth:logout', handleLogout);
+    return () => window.removeEventListener('auth:logout', handleLogout);
+  }, [clearScheduledRefresh]);
 
   // Check auth status on mount
   useEffect(() => {
     checkAuth();
-  }, []);
+
+    return () => clearScheduledRefresh();
+  }, [clearScheduledRefresh]);
 
   const checkAuth = async () => {
     try {
@@ -30,12 +103,33 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      // Check if token is expired
+      const timeToExpiry = getTokenTimeToExpiry(token);
+      if (timeToExpiry <= 0) {
+        // Token expired, try to refresh
+        try {
+          const { data } = await authApi.refreshToken();
+          const newToken = data.data.accessToken;
+          localStorage.setItem('accessToken', newToken);
+          scheduleTokenRefresh(newToken);
+        } catch (refreshErr) {
+          // Refresh failed, clear token
+          localStorage.removeItem('accessToken');
+          setLoading(false);
+          return;
+        }
+      } else {
+        // Schedule refresh for valid token
+        scheduleTokenRefresh(token);
+      }
+
       const { data } = await authApi.me();
       setUser(data.data.user);
       setProfile(data.data.profile);
     } catch (err) {
       console.error('Auth check failed:', err);
       localStorage.removeItem('accessToken');
+      clearScheduledRefresh();
     } finally {
       setLoading(false);
     }
@@ -46,8 +140,12 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       const { data } = await authApi.login({ email, password });
 
-      localStorage.setItem('accessToken', data.data.accessToken);
+      const token = data.data.accessToken;
+      localStorage.setItem('accessToken', token);
       setUser(data.data.user);
+
+      // Schedule token refresh
+      scheduleTokenRefresh(token);
 
       // Fetch full profile
       const profileRes = await authApi.me();
@@ -80,6 +178,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout error:', err);
     } finally {
       localStorage.removeItem('accessToken');
+      clearScheduledRefresh();
       setUser(null);
       setProfile(null);
     }

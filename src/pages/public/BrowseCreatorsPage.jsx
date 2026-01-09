@@ -9,43 +9,47 @@ import { creatorApi, lookupApi } from '../../api';
 // ============== CREATOR PROFILE MODAL ==============
 const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState('Portfolio');
+  const [fullCreator, setFullCreator] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch full creator profile when modal opens
+  useEffect(() => {
+    if (isOpen && creator?.id) {
+      setLoading(true);
+      creatorApi.getById(creator.id)
+        .then(({ data }) => {
+          setFullCreator(data.data);
+        })
+        .catch((err) => {
+          console.error('Failed to load creator profile:', err);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    } else {
+      setFullCreator(null);
+    }
+  }, [isOpen, creator?.id]);
 
   if (!isOpen || !creator) return null;
 
-  const portfolio = creator.portfolio || [
-    {
-      id: 1,
-      image: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=400&h=500&fit=crop',
-      title: 'Brand Campaign',
-      client: 'Brand Partner'
-    },
-    {
-      id: 2,
-      image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=400&h=500&fit=crop',
-      title: 'Product Review',
-      client: 'Product Partner'
-    },
-    {
-      id: 3,
-      image: 'https://images.unsplash.com/photo-1604537466158-719b1972feb8?w=400&h=500&fit=crop',
-      title: 'Video Content',
-      client: 'Content Partner'
-    }
-  ];
+  // Use full creator data if available, otherwise fall back to search result
+  const displayCreator = fullCreator || creator;
+  const portfolio = displayCreator.portfolio || [];
 
   const stats = [
-    { value: creator.followersCount || formatFollowers(creator.totalFollowers) || '10K', label: 'Followers' },
-    { value: creator.engagement || '8.5%', label: 'Engagement' },
-    { value: creator.campaignsCount || creator.totalReviews || '0', label: 'Campaigns' },
-    { value: creator.completionRate || '95', label: 'Completion' },
+    { value: displayCreator.followersCount || formatFollowers(displayCreator.totalFollowers) || '10K', label: 'Followers' },
+    { value: displayCreator.engagement || '8.5%', label: 'Engagement' },
+    { value: displayCreator.campaignsCount || displayCreator.completedCollaborations || '0', label: 'Campaigns' },
+    { value: displayCreator.completionRate || '95', label: 'Completion' },
   ];
 
-  const reviews = creator.reviewCount || creator.totalReviews || 0;
+  const reviews = displayCreator.reviewCount || displayCreator.totalReviews || 0;
 
   // Format categories from API
-  const categories = creator.categories?.map(c => c.name) ||
-                     creator.categoryNames ||
-                     [creator.tier ? `${creator.tier} Creator` : 'Creator'];
+  const categories = displayCreator.categories?.map(c => c.name) ||
+                     displayCreator.categoryNames ||
+                     [displayCreator.tier ? `${displayCreator.tier} Creator` : 'Creator'];
 
   return (
     <>
@@ -64,7 +68,7 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
           {/* Cover Image */}
           <div className="relative h-48 overflow-hidden">
             <img
-              src={creator.coverImage || getCreatorImage(creator)}
+              src={displayCreator.coverImage || getCreatorImage(displayCreator)}
               alt="Cover"
               className="w-full h-full object-cover"
             />
@@ -81,12 +85,19 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
 
           {/* Scrollable Content */}
           <div className="px-6 pb-6 overflow-y-auto max-h-[calc(90vh-192px)]">
+            {/* Loading State */}
+            {loading && (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            )}
+
             {/* Avatar & Basic Info */}
             <div className="flex items-start gap-4 -mt-12 mb-4">
               <div className="relative flex-shrink-0">
                 <img
-                  src={getCreatorImage(creator)}
-                  alt={creator.displayName}
+                  src={getCreatorImage(displayCreator)}
+                  alt={displayCreator.displayName}
                   className="w-24 h-24 rounded-2xl object-cover border-4 border-white shadow-lg"
                 />
               </div>
@@ -95,14 +106,14 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
                 <div className="flex items-start justify-between flex-wrap gap-2">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-xl font-bold text-gray-900">{creator.displayName}</h2>
-                      {creator.isVerified && (
+                      <h2 className="text-xl font-bold text-gray-900">{displayCreator.displayName}</h2>
+                      {displayCreator.isVerified && (
                         <Verified size={18} className="text-blue-600 fill-blue-100" />
                       )}
                     </div>
                     <div className="flex items-center gap-1 text-sm text-gray-500 mt-0.5">
                       <MapPin size={14} />
-                      <span>{creator.state?.name || creator.location || 'Nigeria'}</span>
+                      <span>{displayCreator.state?.name || displayCreator.location || 'Nigeria'}</span>
                     </div>
                     {/* Tags */}
                     <div className="flex flex-wrap gap-1.5 mt-2">
@@ -118,18 +129,18 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
                   </div>
 
                   {/* Rating */}
-                  {parseFloat(creator.averageRating) > 0 && (
+                  {parseFloat(displayCreator.averageRating) > 0 && (
                     <div className="flex items-center gap-1 text-sm">
                       <div className="flex">
                         {[1, 2, 3, 4, 5].map((star) => (
                           <Star
                             key={star}
                             size={14}
-                            className={`${star <= Math.round(parseFloat(creator.averageRating)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                            className={`${star <= Math.round(parseFloat(displayCreator.averageRating)) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
                           />
                         ))}
                       </div>
-                      <span className="font-medium text-gray-900 ml-1">{parseFloat(creator.averageRating).toFixed(1)}</span>
+                      <span className="font-medium text-gray-900 ml-1">{parseFloat(displayCreator.averageRating).toFixed(1)}</span>
                       <span className="text-gray-500">({reviews} Reviews)</span>
                     </div>
                   )}
@@ -153,7 +164,7 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
             <div className="mb-6">
               <h3 className="font-semibold text-gray-900 mb-2">About</h3>
               <p className="text-sm text-gray-600 leading-relaxed">
-                {creator.bio || `Professional content creator helping brands connect with engaged Nigerian audiences. Specializing in authentic storytelling and high-quality content that drives real results.`}
+                {displayCreator.bio || `Professional content creator helping brands connect with engaged Nigerian audiences. Specializing in authentic storytelling and high-quality content that drives real results.`}
               </p>
             </div>
 
@@ -197,23 +208,29 @@ const CreatorProfileModal = ({ creator, isOpen, onClose }) => {
             {/* Portfolio Grid */}
             {activeTab === 'Portfolio' && (
               <div className="grid grid-cols-3 gap-3">
-                {portfolio.map((item) => (
-                  <div
-                    key={item.id}
-                    className="relative rounded-xl overflow-hidden aspect-[3/4] group cursor-pointer"
-                  >
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                    <div className="absolute bottom-3 left-3 right-3 text-white">
-                      <p className="font-semibold text-sm">{item.title}</p>
-                      <p className="text-xs text-gray-300">{item.client}</p>
+                {portfolio.length > 0 ? (
+                  portfolio.map((item) => (
+                    <div
+                      key={item.id}
+                      className="relative rounded-xl overflow-hidden aspect-[3/4] group cursor-pointer"
+                    >
+                      <img
+                        src={item.mediaUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                      <div className="absolute bottom-3 left-3 right-3 text-white">
+                        <p className="font-semibold text-sm">{item.title}</p>
+                        {item.brandName && <p className="text-xs text-gray-300">{item.brandName}</p>}
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="col-span-3 text-center py-8 text-gray-500">
+                    No portfolio items yet
                   </div>
-                ))}
+                )}
               </div>
             )}
 

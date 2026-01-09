@@ -14,7 +14,7 @@ import {
   Loader2,
   ExternalLink
 } from 'lucide-react';
-import { requestApi, paymentApi } from '../../api';
+import { requestApi, paymentApi, messageApi } from '../../api';
 import { useAuth } from '../../context/AuthContext';
 import { PaystackPayment, EscrowStatus } from '../../components/payment';
 
@@ -27,6 +27,7 @@ const RequestDetail = () => {
   const [escrow, setEscrow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [messageLoading, setMessageLoading] = useState(false);
   const [error, setError] = useState(null);
   const [revisionNotes, setRevisionNotes] = useState('');
   const [showRevisionModal, setShowRevisionModal] = useState(false);
@@ -138,6 +139,31 @@ const RequestDetail = () => {
     }
   };
 
+  const handleMessageCreator = async () => {
+    if (!request?.creator?.id || !request?.brand?.id) {
+      setError('Unable to start conversation. Missing profile information.');
+      return;
+    }
+
+    try {
+      setMessageLoading(true);
+      // Create or get existing conversation
+      const { data } = await messageApi.createOrGetConversation(
+        request.brand.id,
+        request.creator.id,
+        id // requestId
+      );
+
+      // Navigate to the conversation
+      navigate(`/brand/messages/${data.data.id}`);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+      setError('Failed to start conversation with creator');
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const styles = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -235,20 +261,34 @@ const RequestDetail = () => {
           {/* Creator Info */}
           <div className="bg-white rounded-xl shadow p-6">
             <h2 className="font-semibold text-gray-900 mb-4">Creator</h2>
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
-                {request.creator?.profileImage ? (
-                  <img src={request.creator.profileImage} alt="" className="w-full h-full rounded-full object-cover" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center">
+                  {request.creator?.profileImage ? (
+                    <img src={request.creator.profileImage} alt="" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    <User className="w-8 h-8 text-gray-400" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">
+                    {request.creator?.displayName || `${request.creator?.firstName} ${request.creator?.lastName}`}
+                  </h3>
+                  <p className="text-sm text-gray-500">{request.creator?.tier} Creator</p>
+                </div>
+              </div>
+              <button
+                onClick={handleMessageCreator}
+                disabled={messageLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+              >
+                {messageLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <User className="w-8 h-8 text-gray-400" />
+                  <MessageSquare className="w-4 h-4" />
                 )}
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-900">
-                  {request.creator?.displayName || `${request.creator?.firstName} ${request.creator?.lastName}`}
-                </h3>
-                <p className="text-sm text-gray-500">{request.creator?.tier} Creator</p>
-              </div>
+                Message
+              </button>
             </div>
           </div>
 

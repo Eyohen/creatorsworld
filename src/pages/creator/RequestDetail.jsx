@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { requestApi, paymentApi } from '../../api';
+import { requestApi, paymentApi, messageApi } from '../../api';
 import {
   ArrowLeft, Building2, Calendar, DollarSign, Clock, CheckCircle2,
   XCircle, AlertCircle, FileText, Loader2, MessageSquare, Eye,
@@ -134,6 +134,9 @@ const RequestDetail = () => {
   const [contentNotes, setContentNotes] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Messaging state
+  const [messageLoading, setMessageLoading] = useState(false);
 
   useEffect(() => {
     loadRequest();
@@ -269,6 +272,31 @@ const RequestDetail = () => {
       setSubmitError(err.response?.data?.message || 'Failed to submit content');
     } finally {
       setSubmitLoading(false);
+    }
+  };
+
+  const handleMessageBrand = async () => {
+    if (!request?.creator?.id || !request?.brand?.id) {
+      setError('Unable to start conversation. Missing profile information.');
+      return;
+    }
+
+    try {
+      setMessageLoading(true);
+      // Create or get existing conversation
+      const { data } = await messageApi.createOrGetConversation(
+        request.brand.id,
+        request.creator.id,
+        id // requestId
+      );
+
+      // Navigate to the conversation
+      navigate(`/creator/messages/${data.data.id}`);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+      setError('Failed to start conversation with brand');
+    } finally {
+      setMessageLoading(false);
     }
   };
 
@@ -470,21 +498,35 @@ const RequestDetail = () => {
           {/* Brand Info */}
           <div className="pt-6 border-t border-gray-100">
             <h3 className="font-semibold text-gray-900 mb-4">About the Brand</h3>
-            <div className="flex items-start gap-4 p-4 bg-gray-50 rounded-xl">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden flex-shrink-0">
-                {request?.brand?.logo ? (
-                  <img src={request.brand.logo} alt="" className="w-full h-full object-cover" />
+            <div className="flex items-start justify-between gap-4 p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {request?.brand?.logo ? (
+                    <img src={request.brand.logo} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-6 h-6 text-gray-400" />
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-gray-900">{request?.brand?.companyName || 'Unknown Brand'}</h4>
+                  <p className="text-sm text-gray-500 capitalize">{request?.brand?.tier || 'Standard'} Brand</p>
+                  {request?.brand?.description && (
+                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{request.brand.description}</p>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={handleMessageBrand}
+                disabled={messageLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex-shrink-0"
+              >
+                {messageLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Building2 className="w-6 h-6 text-gray-400" />
+                  <MessageSquare className="w-4 h-4" />
                 )}
-              </div>
-              <div className="flex-1">
-                <h4 className="font-semibold text-gray-900">{request?.brand?.companyName || 'Unknown Brand'}</h4>
-                <p className="text-sm text-gray-500 capitalize">{request?.brand?.tier || 'Standard'} Brand</p>
-                {request?.brand?.description && (
-                  <p className="text-sm text-gray-600 mt-2 line-clamp-2">{request.brand.description}</p>
-                )}
-              </div>
+                Message
+              </button>
             </div>
           </div>
         </div>
@@ -520,13 +562,18 @@ const RequestDetail = () => {
               <ThumbsDown className="w-5 h-5" />
               Decline
             </button>
-            <Link
-              to={`/creator/messages?request=${id}`}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
+            <button
+              onClick={handleMessageBrand}
+              disabled={messageLoading}
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
-              <MessageSquare className="w-5 h-5" />
+              {messageLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <MessageSquare className="w-5 h-5" />
+              )}
               Message Brand
-            </Link>
+            </button>
           </div>
         </div>
       )}

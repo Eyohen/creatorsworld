@@ -180,6 +180,10 @@ function AppRoutes() {
           element={<ProtectedRoute allowedTypes={['creator']}><CreatorMessages /></ProtectedRoute>}
         />
         <Route
+          path="/creator/messages/:conversationId"
+          element={<ProtectedRoute allowedTypes={['creator']}><CreatorMessages /></ProtectedRoute>}
+        />
+        <Route
           path="/creator/settings"
           element={<ProtectedRoute allowedTypes={['creator']}><CreatorSettings /></ProtectedRoute>}
         />
@@ -209,6 +213,10 @@ function AppRoutes() {
         />
         <Route
           path="/brand/messages"
+          element={<ProtectedRoute allowedTypes={['brand']}><BrandMessages /></ProtectedRoute>}
+        />
+        <Route
+          path="/brand/messages/:conversationId"
           element={<ProtectedRoute allowedTypes={['brand']}><BrandMessages /></ProtectedRoute>}
         />
         <Route
